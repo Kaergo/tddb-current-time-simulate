@@ -1,0 +1,6071 @@
+<!doctype html>
+
+<html lang="zh-CN">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>缺陷屏蔽与 FN 隧穿电流可视化</title>
+
+  <style>
+
+    :root {
+
+      color-scheme: light;
+
+      --bg: #f6f7f2;
+
+      --panel: #ffffff;
+
+      --ink: #1c2026;
+
+      --muted: #66707d;
+
+      --line: #d9ded7;
+
+      --accent: #1967d2;
+
+      --accent-2: #0a7f68;
+
+      --warn: #b15a00;
+
+      --red: #be3c45;
+
+      --green: #287a3e;
+
+      --violet: #6a4acb;
+
+      --shadow: 0 10px 28px rgba(20, 27, 32, 0.08);
+
+      font-family: "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+
+    }
+
+
+
+    * {
+
+      box-sizing: border-box;
+
+    }
+
+
+
+    body {
+
+      margin: 0;
+
+      min-height: 100vh;
+
+      background: var(--bg);
+
+      color: var(--ink);
+
+    }
+
+
+
+    main {
+
+      display: grid;
+
+      grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+
+      gap: 12px;
+
+      padding: 12px;
+
+      height: 100vh;
+
+      align-items: stretch;
+
+      overflow: hidden;
+
+    }
+
+
+
+    aside,
+
+    section.panel,
+
+    .metric,
+
+    .family-row {
+
+      background: var(--panel);
+
+      border: 1px solid var(--line);
+
+      box-shadow: var(--shadow);
+
+    }
+
+
+
+    aside {
+
+      border-radius: 8px;
+
+      padding: 12px;
+
+      overflow: auto;
+
+      min-height: 0;
+
+      max-height: calc(100vh - 24px);
+
+    }
+
+
+
+    .workspace {
+
+      display: flex;
+
+      flex-direction: column;
+
+      gap: 10px;
+
+      min-width: 0;
+
+      min-height: 0;
+
+      overflow: auto;
+
+      padding-right: 2px;
+
+    }
+
+
+
+    header {
+
+      display: flex;
+
+      align-items: flex-start;
+
+      justify-content: space-between;
+
+      gap: 12px;
+
+      padding: 0 2px;
+
+    }
+
+
+
+    h1 {
+
+      margin: 0;
+
+      font-size: 20px;
+
+      line-height: 1.2;
+
+      letter-spacing: 0;
+
+    }
+
+
+
+    h2 {
+
+      margin: 0 0 5px;
+
+      font-size: 14px;
+
+      line-height: 1.3;
+
+      letter-spacing: 0;
+
+    }
+
+
+
+    h3 {
+
+      margin: 16px 0 8px;
+
+      font-size: 13px;
+
+      color: var(--muted);
+
+      text-transform: uppercase;
+
+      letter-spacing: 0.08em;
+
+    }
+
+
+
+    p {
+
+      margin: 2px 0 0;
+
+      color: var(--muted);
+
+      font-size: 12px;
+
+      line-height: 1.5;
+
+    }
+
+
+
+    button {
+
+      appearance: none;
+
+      border: 1px solid var(--line);
+
+      background: #fff;
+
+      color: var(--ink);
+
+      min-height: 34px;
+
+      border-radius: 6px;
+
+      padding: 0 10px;
+
+      cursor: pointer;
+
+      font: inherit;
+
+      font-size: 13px;
+
+    }
+
+
+
+    button:hover,
+
+    button.active {
+
+      border-color: var(--accent);
+
+      color: var(--accent);
+
+      background: #edf4ff;
+
+    }
+
+
+
+    .field {
+
+      display: grid;
+
+      grid-template-columns: 1fr 92px;
+
+      gap: 10px;
+
+      align-items: center;
+
+      margin: 9px 0;
+
+    }
+
+
+
+    .field.full {
+
+      grid-template-columns: 1fr;
+
+      gap: 6px;
+
+    }
+
+
+
+    .toggle-field {
+
+      display: grid;
+
+      grid-template-columns: 1fr auto;
+
+      align-items: center;
+
+      gap: 10px;
+
+      margin: 9px 0;
+
+      padding: 8px 0;
+
+      border-top: 1px solid var(--line);
+
+      border-bottom: 1px solid var(--line);
+
+    }
+
+
+
+    label {
+
+      font-size: 13px;
+
+      color: #303842;
+
+      line-height: 1.3;
+
+    }
+
+
+
+    input[type="number"],
+
+    select {
+
+      width: 100%;
+
+      min-height: 32px;
+
+      border: 1px solid var(--line);
+
+      border-radius: 6px;
+
+      padding: 4px 7px;
+
+      background: #fff;
+
+      color: var(--ink);
+
+      font: inherit;
+
+      font-size: 13px;
+
+    }
+
+
+
+    input[type="range"] {
+
+      width: 100%;
+
+      accent-color: var(--accent);
+
+    }
+
+
+
+    input[type="checkbox"] {
+
+      width: 18px;
+
+      height: 18px;
+
+      accent-color: var(--accent);
+
+    }
+
+
+
+    .family-row {
+
+      border-radius: 8px;
+
+      box-shadow: none;
+
+      padding: 10px;
+
+      margin: 8px 0;
+
+    }
+
+
+
+    .family-head {
+
+      display: flex;
+
+      align-items: center;
+
+      justify-content: space-between;
+
+      gap: 8px;
+
+      margin-bottom: 8px;
+
+      font-size: 13px;
+
+      font-weight: 600;
+
+    }
+
+
+
+    .swatch {
+
+      display: inline-block;
+
+      width: 11px;
+
+      height: 11px;
+
+      border-radius: 50%;
+
+      margin-right: 6px;
+
+      vertical-align: -1px;
+
+    }
+
+
+
+    .family-grid {
+
+      display: grid;
+
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+
+      gap: 8px;
+
+    }
+
+
+
+    .mini-field label {
+
+      display: block;
+
+      margin-bottom: 4px;
+
+      font-size: 12px;
+
+      color: var(--muted);
+
+    }
+
+
+
+    .tau-readout {
+
+      margin-top: 8px;
+
+      padding-top: 8px;
+
+      border-top: 1px solid var(--line);
+
+      color: var(--muted);
+
+      font-size: 12px;
+
+      line-height: 1.35;
+
+    }
+
+
+
+    .metrics {
+
+      display: flex;
+
+      flex-wrap: wrap;
+
+      gap: 6px;
+
+      align-items: center;
+
+      overflow: visible;
+
+    }
+
+
+
+    .metric {
+
+      border-radius: 999px;
+
+      padding: 5px 9px;
+
+      box-shadow: none;
+
+      min-width: 0;
+
+      display: inline-flex;
+
+      align-items: baseline;
+
+      gap: 6px;
+
+      min-height: 28px;
+
+      flex: 0 1 auto;
+
+    }
+
+
+
+    .metric span {
+
+      display: inline;
+
+      color: var(--muted);
+
+      font-size: 11px;
+
+      margin-bottom: 0;
+
+      white-space: nowrap;
+
+      overflow: hidden;
+
+      text-overflow: ellipsis;
+
+    }
+
+
+
+    .metric strong {
+
+      display: inline;
+
+      font-size: 13px;
+
+      line-height: 1.2;
+
+      white-space: nowrap;
+
+      overflow: hidden;
+
+      text-overflow: ellipsis;
+
+    }
+
+
+
+    .metric.secondary {
+
+      display: none;
+
+    }
+
+
+
+    .panel-grid {
+
+      display: grid;
+
+      grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
+
+      grid-auto-rows: auto;
+
+      grid-template-areas:
+
+        "current barrier"
+
+        "kmc field"
+
+        "weibull weibull";
+
+      gap: 10px;
+
+      min-width: 0;
+
+      min-height: auto;
+
+    }
+
+
+
+    section.panel {
+
+      border-radius: 8px;
+
+      padding: 8px;
+
+      min-width: 0;
+
+      min-height: 330px;
+
+      display: flex;
+
+      flex-direction: column;
+
+    }
+
+
+
+    .current-panel {
+
+      grid-area: current;
+
+    }
+
+
+
+    .kmc-panel {
+
+      grid-area: kmc;
+
+    }
+
+
+
+    .barrier-panel {
+
+      grid-area: barrier;
+
+    }
+
+
+
+    .field-panel {
+
+      grid-area: field;
+
+    }
+
+    .weibull-panel {
+
+      grid-area: weibull;
+
+    }
+
+
+
+    canvas {
+
+      width: 100%;
+
+      height: 280px;
+
+      min-height: 145px;
+
+      flex: 0 0 auto;
+
+      display: block;
+
+      border: 1px solid var(--line);
+
+      border-radius: 6px;
+
+      background: #fff;
+
+    }
+
+
+
+    .current-canvas {
+
+      height: 320px;
+
+      min-height: 320px;
+
+    }
+
+
+
+    .kmc-canvas {
+
+      height: 300px;
+
+      min-height: 300px;
+
+    }
+
+    .weibull-panel canvas {
+
+      height: 300px;
+
+      min-height: 300px;
+
+    }
+
+
+
+    .legend {
+
+      display: flex;
+
+      flex-wrap: wrap;
+
+      gap: 4px 8px;
+
+      color: var(--muted);
+
+      font-size: 11px;
+
+      margin-top: 4px;
+
+    }
+
+
+
+    .legend-item {
+
+      display: inline-flex;
+
+      align-items: center;
+
+      gap: 6px;
+
+    }
+
+
+
+    .line-key {
+
+      width: 22px;
+
+      height: 3px;
+
+      border-radius: 2px;
+
+      display: inline-block;
+
+      background: var(--accent);
+
+    }
+
+
+
+    .cell-key {
+
+      width: 12px;
+
+      height: 12px;
+
+      border-radius: 3px;
+
+      display: inline-block;
+
+      border: 1px solid rgba(0, 0, 0, 0.12);
+
+      background: #eef2f3;
+
+    }
+
+
+
+    .pill {
+
+      display: inline-flex;
+
+      align-items: center;
+
+      gap: 6px;
+
+      min-height: 30px;
+
+      border: 1px solid var(--line);
+
+      border-radius: 999px;
+
+      padding: 0 10px;
+
+      color: var(--muted);
+
+      background: #fff;
+
+      font-size: 12px;
+
+      white-space: nowrap;
+
+    }
+
+
+
+    .note {
+
+      border-left: 3px solid var(--warn);
+
+      background: #fff8ef;
+
+      padding: 9px 10px;
+
+      border-radius: 4px;
+
+      color: #563a1d;
+
+      font-size: 13px;
+
+      line-height: 1.45;
+
+      margin-top: 12px;
+
+    }
+
+
+
+    .status-line {
+
+      margin-top: 4px;
+
+      color: var(--muted);
+
+      font-size: 11px;
+
+      line-height: 1.25;
+
+    }
+
+
+
+    .footer-actions {
+
+      display: grid;
+
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+
+      gap: 8px;
+
+      margin-top: 12px;
+
+    }
+
+
+
+    @media (max-width: 1040px) {
+
+      main {
+
+        grid-template-columns: 1fr;
+
+        height: auto;
+
+        overflow: visible;
+
+      }
+
+      .workspace {
+
+        overflow: visible;
+
+      }
+
+
+
+      aside {
+
+        min-height: auto;
+
+        max-height: none;
+
+      }
+
+
+
+      .panel-grid {
+
+        grid-template-columns: 1fr;
+
+        grid-template-rows: none;
+
+        grid-template-areas:
+
+          "current"
+
+          "kmc"
+
+          "barrier"
+
+          "field"
+
+          "weibull";
+
+      }
+
+
+
+      canvas,
+
+      .current-canvas,
+
+      .kmc-canvas {
+
+        height: 300px;
+
+      }
+
+      section.panel {
+
+        min-height: 360px;
+
+      }
+
+    }
+
+
+
+    @media (max-width: 580px) {
+
+      main {
+
+        padding: 10px;
+
+      }
+
+
+
+      .family-grid {
+
+        grid-template-columns: 1fr;
+
+      }
+
+
+
+      header {
+
+        display: block;
+
+      }
+
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+  <main>
+
+    <aside>
+
+      <h2>参数</h2>
+
+      <h3>应力与 FN</h3>
+
+      <div class="field">
+
+        <label for="vg"><i>V</i><sub>g</sub> (V)</label>
+
+        <input id="vg" type="number" step="0.1" value="38">
+
+      </div>
+
+      <div class="field">
+
+        <label for="tox"><i>t</i><sub>ox</sub> (nm)</label>
+
+        <input id="tox" type="number" step="0.1" min="1" value="42">
+
+      </div>
+
+      <div class="field">
+        <label for="phiB">势垒 <i>&Phi;</i><sub>B</sub> (eV)</label>
+        <input id="phiB" type="number" step="0.05" min="0.1" value="2.7">
+      </div>
+
+      <div class="field">
+        <label for="mOx"><i>m</i><sub>ox</sub> / <i>m</i><sub>0</sub></label>
+        <input id="mOx" type="number" step="0.01" min="0.01" value="0.42">
+      </div>
+
+      <div class="field">
+        <label for="mSiC"><i>m</i><sub>SiC</sub> / <i>m</i><sub>0</sub></label>
+        <input id="mSiC" type="number" step="0.01" min="0.01" value="0.29">
+      </div>
+
+      <div class="field">
+
+        <label for="areaCm2">面积 (cm<sup>2</sup>)</label>
+
+        <input id="areaCm2" type="number" step="1e-5" min="1e-12" value="0.04">
+
+      </div>
+
+      <div class="field">
+
+        <label for="epsOx"><i>&epsilon;</i><sub>ox</sub> / <i>&epsilon;</i><sub>0</sub></label>
+
+        <input id="epsOx" type="number" step="0.1" min="1" value="3.9">
+
+      </div>
+
+
+
+      <div class="field">
+
+        <label for="minField"><i>E</i><sub>eff</sub> 下限 (MV/cm)</label>
+
+        <input id="minField" type="number" step="0.1" min="0.01" value="0.1">
+
+      </div>
+
+
+
+      <h3>时间</h3>
+
+      <div class="field full">
+
+        <label for="timeSlider"><i>t</i> = <strong id="timeLabel">-</strong></label>
+
+        <input id="timeSlider" type="range" min="-3" max="6.1" step="0.001" value="3">
+
+      </div>
+
+      <div class="field">
+
+        <label for="timeEnd">曲线终点 (s)</label>
+
+        <input id="timeEnd" type="number" min="1" step="1000" value="1000000">
+
+      </div>
+
+
+
+      <h3>时间常数模型</h3>
+
+      <div class="field">
+
+        <label for="tempK"><i>T</i> (K)</label>
+
+        <input id="tempK" type="number" min="1" step="1" value="423.15">
+
+      </div>
+
+      <div class="field">
+
+        <label for="tauGamma">衰减系数 <i>K</i> (1/nm)</label>
+
+        <input id="tauGamma" type="number" min="0" step="0.05" value="0.35">
+
+      </div>
+
+      <div class="field">
+
+        <label for="tauFieldBeta">场强系数 <i>&beta;</i> (1/(MV/cm))</label>
+
+        <input id="tauFieldBeta" type="number" min="0" step="0.01" value="0.08">
+
+      </div>
+
+      <h3>有效缺陷族</h3>
+
+      <div class="toggle-field">
+        <label for="scheme3Enabled">启用空间指数衰减约束 (方案三)</label>
+        <input id="scheme3Enabled" type="checkbox">
+      </div>
+
+      <div id="scheme3Inputs" style="display: none; border-left: 2px solid var(--violet); padding-left: 10px; margin-bottom: 15px;">
+        <div class="field">
+          <label for="scheme3N0">最大界面缺陷密度 <i>N</i><sub>0</sub> (10<sup>12</sup> cm<sup>-2</sup>)</label>
+          <input id="scheme3N0" type="number" min="0" step="0.1" value="2.0">
+        </div>
+        <div class="field">
+          <label for="scheme3Xdecay">空间衰减长度 <i>x</i><sub>decay</sub> (nm)</label>
+          <input id="scheme3Xdecay" type="number" min="0.05" step="0.05" value="0.3">
+        </div>
+      </div>
+
+      <div id="familyControls"></div>
+
+      <h3>氧化层厚度起伏</h3>
+
+      <div class="toggle-field">
+
+        <label for="toxMcEnabled">启用器件间 tox Monte Carlo</label>
+
+        <input id="toxMcEnabled" type="checkbox">
+
+      </div>
+
+      <div class="field">
+
+        <label for="toxMcDevices">器件数</label>
+
+        <input id="toxMcDevices" type="number" min="2" max="80" step="1" value="24">
+
+      </div>
+
+      <div class="field">
+
+        <label for="toxMcPatches">每器件局域区域数</label>
+
+        <input id="toxMcPatches" type="number" min="1" max="120" step="1" value="32">
+
+      </div>
+
+      <div class="field">
+
+        <label for="toxMcSigmaDevice">器件间 σ<sub>tox</sub> (nm)</label>
+
+        <input id="toxMcSigmaDevice" type="number" min="0" step="0.01" value="0.08">
+
+      </div>
+
+      <div class="field">
+
+        <label for="toxMcSigmaLocal">局域 RMS σ<sub>tox</sub> (nm)</label>
+
+        <input id="toxMcSigmaLocal" type="number" min="0" step="0.01" value="0.12">
+
+      </div>
+
+      <div class="field">
+
+        <label for="toxMcSeed">tox MC 随机种子</label>
+
+        <input id="toxMcSeed" type="number" step="1" value="20260609">
+
+      </div>
+
+      <div class="field">
+
+        <label for="toxMcCurveCount">显示 I-t 曲线数</label>
+
+        <input id="toxMcCurveCount" type="number" min="0" max="24" step="1" value="10">
+
+      </div>
+
+
+
+      <h3>KMC 导电通道</h3>
+
+      <div class="toggle-field">
+
+        <label for="kmcEnabled">启用 KMC 击穿演示</label>
+
+        <input id="kmcEnabled" type="checkbox" checked>
+
+      </div>
+
+      <div class="field">
+
+        <label for="kmcSeed">随机种子</label>
+
+        <input id="kmcSeed" type="number" step="1" value="20260608">
+
+      </div>
+
+      <div class="field">
+
+        <label for="kmcDeviceLengthNm">器件横向长度 (nm)</label>
+
+        <input id="kmcDeviceLengthNm" type="number" min="8" max="240" step="1" value="50">
+
+      </div>
+
+      <div class="field">
+
+        <label for="kmcP0">初始缺陷概率 (%)</label>
+
+        <input id="kmcP0" type="number" min="0" max="30" step="0.1" value="2.0">
+
+      </div>
+
+      <div class="field">
+
+        <label for="kmcLogK0">log<sub>10</sub>(<i>k</i><sub>0</sub> / s<sup>-1</sup>)</label>
+
+        <input id="kmcLogK0" type="number" step="0.1" value="-6.4">
+
+      </div>
+
+      <div class="field">
+
+        <label for="kmcAlpha">E-model <i>&gamma;</i><sub>E</sub> ((MV/cm)<sup>-1</sup>)</label>
+
+        <input id="kmcAlpha" type="number" min="0" step="0.05" value="0.75">
+
+      </div>
+
+      <div class="field">
+
+        <label for="kmcNeighborBoost">邻近增强</label>
+
+        <input id="kmcNeighborBoost" type="number" min="0" step="0.1" value="2.6">
+
+      </div>
+
+      <div class="field">
+
+        <label for="kmcMaxEvents">最大事件数</label>
+
+        <input id="kmcMaxEvents" type="number" min="1" max="10000" step="50" value="1600">
+
+      </div>
+
+      <div class="field">
+
+        <label for="kmcBdGain">击穿后电流倍率</label>
+
+        <input id="kmcBdGain" type="number" min="1" step="10" value="1000000">
+
+      </div>
+
+
+
+      <div class="footer-actions">
+
+        <button id="resetX" type="button">重置缺陷深度</button>
+
+        <button id="downloadPng" type="button">保存主图</button>
+
+        <button id="downloadCsv" type="button">导出 I-t</button>
+
+      </div>
+
+
+
+      <div class="field full">
+
+        <label for="dataImport">导入实验 I-t 数据 (CSV/TXT)</label>
+
+        <input id="dataImport" type="file" accept=".csv,.txt,text/csv,text/plain">
+
+      </div>
+
+      <div id="dataStatus" class="status-line">默认加载 previous_current.csv</div>
+
+
+
+      <div class="note">
+        <i>E</i><sub>t</sub> 以 <i>E</i><sub>c</sub>(SiC) = 0 eV 为参考。俘获前置时间常数 <i>&tau;</i><sub>c0</sub> = 1 / (<i>&sigma;</i><sub>eff</sub> &middot; <i>v</i><sub>th</sub> &middot; <i>n</i><sub>s</sub>)。对于深能级缺陷 (<i>E</i><sub>t</sub> &lt; 0)，引入多声子辅助晶格弛豫（Lattice Relaxation）修正：<i>&sigma;</i><sub>eff</sub> = <i>&sigma;</i> &middot; exp(-<i>E</i><sub>A</sub> / <i>k</i>T)，其中激活能 <i>E</i><sub>A</sub> = 0.15 &middot; |<i>E</i><sub>t</sub>| eV。考虑高场下能带弯曲的势垒降低量为 0.5 &middot; <i>q</i> &middot; <i>E</i><sub>eff</sub> &middot; <i>x</i> = 0.05 &middot; <i>E</i><sub>eff</sub>(MV/cm) &middot; <i>x</i>(nm) eV。
+      </div>
+
+    </aside>
+
+
+
+    <div class="workspace">
+
+      <header>
+
+        <div>
+
+          <h1>缺陷屏蔽、隧穿势垒与 FN 电流</h1>
+
+          <p>主结果是电流 <i>I</i>(<i>t</i>) 随时间变化；<i>Q</i><sub>def</sub>(<i>t</i>) 和 <i>E</i><sub>inj</sub>(<i>t</i>) 用来解释电流为什么衰减。</p>
+
+        </div>
+
+        <div class="pill" id="fieldPill">E<sub>0</sub> -</div>
+
+      </header>
+
+
+
+      <div class="metrics">
+
+        <div class="metric"><span><i>I</i>(<i>t</i>)</span><strong id="mCurrent">-</strong></div>
+
+        <div class="metric secondary"><span>log<sub>10</sub> <i>I</i>(<i>t</i>)</span><strong id="mLogI">-</strong></div>
+
+        <div class="metric secondary"><span><i>I</i> / <i>I</i><sub>no_defect</sub></span><strong id="mRatio">-</strong></div>
+
+        <div class="metric"><span><i>E</i><sub>inj</sub>(<i>t</i>)</span><strong id="mEeff">-</strong></div>
+
+        <div class="metric secondary"><span><i>Q</i><sub>def</sub>(<i>t</i>)</span><strong id="mQdef">-</strong></div>
+
+        <div class="metric secondary"><span><i>&tau;</i><sub>eff</sub> 范围</span><strong id="mTauRange">-</strong></div>
+
+        <div class="metric" id="mFitError" style="display: none;"><span>拟合 <i>R</i><sup>2</sup></span><strong id="mR2">-</strong></div>
+
+        <div class="metric" id="mFitRmse" style="display: none;"><span>RMSE (ln)</span><strong id="mRmse">-</strong></div>
+
+        <div class="metric"><span>KMC <i>t</i><sub>BD</sub></span><strong id="mKmcTbd">-</strong></div>
+
+        <div class="metric"><span>KMC 通路</span><strong id="mKmcPath">-</strong></div>
+
+      </div>
+
+
+
+      <div class="panel-grid">
+
+        <section class="panel current-panel">
+
+          <h2>电流 <i>I</i>(<i>t</i>) 随时间变化</h2>
+
+          <canvas id="currentCanvas" class="current-canvas" width="1440" height="540"></canvas>
+
+          <div class="legend">
+
+            <span class="legend-item"><span class="line-key" style="background:#1967d2"></span>含缺陷 <i>I</i>(<i>t</i>)</span>
+
+            <span class="legend-item"><span class="line-key" style="background:#9aa3ad"></span>无缺陷基准 <i>I</i><sub>no_defect</sub></span>
+
+            <span class="legend-item"><span class="line-key" style="background:#b15a00"></span>当前时间</span>
+
+            <span class="legend-item"><span class="line-key" style="background:#be3c45"></span>KMC 击穿展示 <i>I</i><sub>KMC</sub></span>
+
+            <span class="legend-item"><span class="line-key" style="background:#7c3aed"></span>tox MC P5/P50/P95</span>
+
+          </div>
+
+          <div id="currentStatus" class="status-line">-</div>
+
+        </section>
+
+
+
+        <section class="panel kmc-panel">
+
+          <h2>KMC 导电通道形成</h2>
+
+          <canvas id="kmcCanvas" class="kmc-canvas" width="1440" height="520"></canvas>
+
+          <div class="legend">
+
+            <span class="legend-item"><span class="cell-key" style="background:#eef2f3"></span>完整栅格</span>
+
+            <span class="legend-item"><span class="cell-key" style="background:#0a7f68"></span>初始缺陷</span>
+
+            <span class="legend-item"><span class="cell-key" style="background:#d98c1e"></span>KMC 生成缺陷</span>
+
+            <span class="legend-item"><span class="cell-key" style="background:#be3c45"></span>贯通路径</span>
+
+          </div>
+
+          <div id="kmcStatus" class="status-line">-</div>
+
+        </section>
+
+
+
+        <section class="panel barrier-panel">
+
+          <h2>局域场改变导致的隧穿势垒变化</h2>
+
+          <canvas id="barrierCanvas" width="920" height="520"></canvas>
+
+          <div class="legend">
+
+            <span class="legend-item"><span class="line-key" style="background:#1967d2"></span>SiO<sub>2</sub> 导带 <i>U</i><sub>c</sub>(<i>x</i>)</span>
+
+            <span class="legend-item"><span class="line-key" style="background:#0a7f68"></span>氧化物场强 <i>E</i><sub>ox</sub>(<i>x</i>)</span>
+
+            <span class="legend-item"><span class="cell-key" style="background:#d44b4b;border-radius:50%"></span>缺陷点：<i>E</i><sub>t</sub>=<i>E</i><sub>c</sub>(SiC)=0 eV，大小 &prop; <i>N</i><sub>sheet</sub></span>
+
+          </div>
+
+          <div id="barrierStatus" class="status-line">-</div>
+
+        </section>
+
+
+
+        <section class="panel field-panel">
+
+          <h2>缺陷俘获电荷与有效场</h2>
+
+          <canvas id="fieldCanvas" width="920" height="520"></canvas>
+
+          <div class="legend">
+
+            <span class="legend-item"><span class="line-key" style="background:#0a7f68"></span><i>Q</i><sub>def</sub>(<i>t</i>)</span>
+
+            <span class="legend-item"><span class="line-key" style="background:#6a4acb"></span><i>E</i><sub>inj</sub>(<i>t</i>)</span>
+
+          </div>
+
+        </section>
+
+        <section class="panel weibull-panel">
+
+          <h2>tox 起伏导致的 Weibull 击穿分布</h2>
+
+          <canvas id="weibullCanvas" width="1440" height="360"></canvas>
+
+          <div class="legend">
+
+            <span class="legend-item"><span class="line-key" style="background:#7c3aed"></span>排序器件 <i>t</i><sub>BD</sub></span>
+
+            <span class="legend-item"><span class="line-key" style="background:#111827"></span>Weibull 线性拟合</span>
+
+          </div>
+
+          <div id="weibullStatus" class="status-line">启用 tox Monte Carlo 后显示 Weibull 分布。</div>
+
+        </section>
+
+      </div>
+
+    </div>
+
+  </main>
+
+
+
+  <script>
+
+    "use strict";
+
+
+
+    const Q = 1.602176634e-19;
+
+    const HBAR = 1.054571817e-34;
+
+    const M0 = 9.1093837015e-31;
+
+    const EPS0 = 8.8541878128e-12;
+
+    const KB_EV = 8.617333262145e-5;
+
+    const DEFAULT_TEMP_K = 423.15;
+
+
+    const KMC_CELL_NM = 1;
+
+    const REF_PHI_B = 2.7;
+
+    const REF_FIELD_MVCM = 10 * 38 / 42;
+
+    const REF_MOX = 0.42;
+
+    const REF_MSIC = 0.29;
+
+    const colors = ["#d44b4b", "#247f63", "#6a4acb"];
+
+    const defaults = [
+      {name: "缺陷组 1 (浅层)", enabled: true, n12: 0.12, sigma: 1.0265e-31, x: 0.20, et: 0.0},
+      {name: "缺陷组 2 (中层)", enabled: true, n12: 1.64, sigma: 2.8043e-33, x: 0.45, et: 0.0},
+      {name: "缺陷组 3 (深层)", enabled: true, n12: 1.07, sigma: 4.6911e-34, x: 0.85, et: 0.0}
+    ];
+
+
+
+    const el = (id) => document.getElementById(id);
+
+    const controls = [
+
+      "vg", "tox", "phiB", "mOx", "mSiC", "areaCm2", "epsOx", "minField",
+
+      "timeSlider", "timeEnd", "tempK", "tauGamma", "tauFieldBeta",
+
+      "toxMcEnabled", "toxMcDevices", "toxMcPatches", "toxMcSigmaDevice", "toxMcSigmaLocal", "toxMcSeed", "toxMcCurveCount",
+
+      "kmcEnabled", "kmcSeed", "kmcDeviceLengthNm", "kmcP0", "kmcLogK0",
+
+      "kmcAlpha", "kmcNeighborBoost", "kmcMaxEvents", "kmcBdGain",
+
+      "scheme3Enabled", "scheme3N0", "scheme3Xdecay"
+
+    ];
+
+    const familyRoot = el("familyControls");
+
+    let importedData = null;
+
+
+
+    function clamp(v, lo, hi) {
+
+      return Math.max(lo, Math.min(hi, v));
+
+    }
+
+
+
+    function logspace(logMin, logMax, n) {
+
+      const out = [];
+
+      for (let i = 0; i < n; i += 1) {
+
+        const f = i / Math.max(1, n - 1);
+
+        out.push(Math.pow(10, logMin + f * (logMax - logMin)));
+
+      }
+
+      return out;
+
+    }
+
+
+
+    function makeRng(seed) {
+
+      let a = (seed >>> 0) || 0x9e3779b9;
+
+      return function rng() {
+
+        a |= 0;
+
+        a = (a + 0x6d2b79f5) | 0;
+
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+
+      };
+
+    }
+
+
+
+    function splitDelimitedLine(line) {
+
+      const cells = [];
+
+      let cur = "";
+
+      let quoted = false;
+
+      for (let i = 0; i < line.length; i += 1) {
+
+        const ch = line[i];
+
+        if (ch === '"') {
+
+          quoted = !quoted;
+
+        } else if (!quoted && (ch === "," || ch === "\t" || ch === ";")) {
+
+          cells.push(cur.trim());
+
+          cur = "";
+
+        } else {
+
+          cur += ch;
+
+        }
+
+      }
+
+      cells.push(cur.trim());
+
+      return cells;
+
+    }
+
+
+
+    function parseCurrentText(text) {
+
+      const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+
+      if (!lines.length) throw new Error("empty file");
+
+      const header = splitDelimitedLine(lines[0]).map((h) => h.replace(/^"|"$/g, ""));
+
+      const lower = header.map((h) => h.toLowerCase());
+
+      const timeIdx = lower.findIndex((h) => h === "ch11_time_s" || h === "time_s" || h === "time" || h.includes("time"));
+
+      const currentIdx = lower.findIndex((h) => h === "ch11_i_a" || h === "i_a" || h === "current_a" || h.includes("current") || h.endsWith("_i_a"));
+
+      const hasHeader = timeIdx >= 0 && currentIdx >= 0;
+
+      const t = [];
+
+      const y = [];
+
+      const start = hasHeader ? 1 : 0;
+
+      for (let i = start; i < lines.length; i += 1) {
+
+        const cells = splitDelimitedLine(lines[i]);
+
+        const ti = hasHeader ? timeIdx : 0;
+
+        const yi = hasHeader ? currentIdx : 1;
+
+        const tv = Number(cells[ti]);
+
+        const iv = Number(cells[yi]);
+
+        if (Number.isFinite(tv) && Number.isFinite(iv) && tv > 0 && iv > 0) {
+
+          t.push(tv);
+
+          y.push(iv);
+
+        }
+
+      }
+
+      if (t.length < 2) throw new Error("no valid positive time/current rows");
+
+      return downsampleImportedData({t, current: y}, 2500);
+
+    }
+
+
+
+    function downsampleImportedData(data, maxPoints) {
+
+      if (data.t.length <= maxPoints) return data;
+
+      const t = [];
+
+      const current = [];
+
+      for (let i = 0; i < maxPoints; i += 1) {
+
+        const idx = Math.round(i * (data.t.length - 1) / (maxPoints - 1));
+
+        t.push(data.t[idx]);
+
+        current.push(data.current[idx]);
+
+      }
+
+      return {t, current};
+
+    }
+
+
+
+    function setImportedData(data, label) {
+
+      importedData = data;
+
+      const rangeLabel = `${label}: ${data.t.length} points, ${data.t[0].toExponential(2)}-${data.t[data.t.length - 1].toExponential(2)} s`;
+
+      el("dataStatus").textContent = rangeLabel;
+
+      if (data && data.t && data.t.length > 0) {
+
+        const tMax = Math.max(...data.t);
+
+        const tMin = Math.min(...data.t);
+
+        const timeEndInput = el("timeEnd");
+
+        if (timeEndInput) timeEndInput.value = tMax * 10;
+
+        const logMid = Math.pow(10, (Math.log10(tMin) + Math.log10(tMax)) / 2);
+
+        const timeSliderInput = el("timeSlider");
+
+        if (timeSliderInput) timeSliderInput.value = Math.log10(logMid);
+
+      }
+
+      autoFitImportedData(rangeLabel);
+
+    }
+
+
+
+    function syncTimeSliderToTime(targetTime) {
+
+      if (!Number.isFinite(targetTime) || targetTime <= 0) return false;
+
+      const timeEndInput = el("timeEnd");
+
+      if (timeEndInput) {
+
+        const currentEnd = Number(timeEndInput.value);
+
+        if (!Number.isFinite(currentEnd) || currentEnd < targetTime) {
+
+          timeEndInput.value = String(targetTime * 1.1);
+
+        }
+
+      }
+
+      const slider = el("timeSlider");
+
+      if (!slider) return false;
+
+      const logT = Math.log10(targetTime);
+
+      const minLog = Number(slider.min);
+
+      const maxLog = Number(slider.max);
+
+      if (Number.isFinite(minLog) && logT < minLog) slider.min = String(logT - 0.1);
+
+      if (Number.isFinite(maxLog) && logT > maxLog) slider.max = String(logT + 0.1);
+
+      slider.value = String(logT);
+
+      return true;
+
+    }
+
+
+
+    async function loadDefaultData() {
+
+      try {
+
+        const res = await fetch("data/previous_current.csv", {cache: "no-store"});
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = parseCurrentText(await res.text());
+
+        const tempInput = el("tempK");
+
+        if (tempInput) tempInput.value = String(DEFAULT_TEMP_K);
+
+        setImportedData(data, "previous_current.csv");
+
+      } catch (err) {
+
+        importedData = null;
+
+        el("dataStatus").textContent = `默认数据未加载: ${err.message}`;
+
+      }
+
+    }
+
+
+
+    function handleDataImport(event) {
+
+      const file = event.target.files && event.target.files[0];
+
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      reader.onload = () => {
+
+        try {
+
+          const data = parseCurrentText(String(reader.result || ""));
+
+          setImportedData(data, file.name);
+
+        } catch (err) {
+
+          el("dataStatus").textContent = `导入失败: ${err.message}`;
+
+        }
+
+      };
+
+      reader.onerror = () => {
+
+        el("dataStatus").textContent = "导入失败: 无法读取文件";
+
+      };
+
+      reader.readAsText(file);
+
+    }
+
+
+
+    function formatSciHtml(v, digits = 2) {
+
+      if (!Number.isFinite(v)) return "-";
+
+      if (v === 0) return "0";
+
+      const abs = Math.abs(v);
+
+      if (abs >= 1e3 || abs < 1e-2) {
+
+        const str = v.toExponential(digits);
+
+        const parts = str.split("e");
+
+        const base = parts[0];
+
+        const exp = parseInt(parts[1], 10);
+
+        return `${base} × 10<sup>${exp}</sup>`;
+
+      }
+
+      return v.toFixed(digits);
+
+    }
+
+
+
+    function formatCompactHtml(v, unit, digits = 2) {
+
+      return `${formatSciHtml(v, digits)} ${unit}`;
+
+    }
+
+
+
+    function formatSciText(v, digits = 2) {
+
+      if (!Number.isFinite(v)) return "-";
+
+      if (v === 0) return "0";
+
+      const abs = Math.abs(v);
+
+      if (abs >= 1e3 || abs < 1e-2) return v.toExponential(digits);
+
+      return v.toFixed(digits);
+
+    }
+
+
+
+    function axisPowerLabel(exp) {
+
+      return exp === 0 ? "" : `× 10<sup>${exp}</sup>`;
+
+    }
+
+
+
+    function drawHtmlText(ctx, html, x, y, align = "left") {
+
+      ctx.save();
+
+      const font = ctx.font || "11px Segoe UI";
+
+      const matches = font.match(/(\d+)px/);
+
+      const fontSize = matches ? parseInt(matches[1], 10) : 11;
+
+      const fontFamily = font.replace(/^\d+px\s+/, "");
+
+
+
+      const tokens = [];
+
+      const regex = /(<\/?[a-z0-9]+>)/gi;
+
+      const parts = html.split(regex);
+
+      let currentStyle = { sup: false, sub: false, italic: false };
+
+      for (const part of parts) {
+
+        if (!part) continue;
+
+        if (part.toLowerCase() === "<sup>") {
+
+          currentStyle.sup = true;
+
+        } else if (part.toLowerCase() === "</sup>") {
+
+          currentStyle.sup = false;
+
+        } else if (part.toLowerCase() === "<sub>") {
+
+          currentStyle.sub = true;
+
+        } else if (part.toLowerCase() === "</sub>") {
+
+          currentStyle.sub = false;
+
+        } else if (part.toLowerCase() === "<i>") {
+
+          currentStyle.italic = true;
+
+        } else if (part.toLowerCase() === "</i>") {
+
+          currentStyle.italic = false;
+
+        } else if (part.startsWith("<")) {
+
+          // ignore
+
+        } else {
+
+          tokens.push({
+
+            text: part,
+
+            sup: currentStyle.sup,
+
+            sub: currentStyle.sub,
+
+            italic: currentStyle.italic
+
+          });
+
+        }
+
+      }
+
+
+
+      let totalW = 0;
+
+      const widths = [];
+
+      for (const tok of tokens) {
+
+        let fSize = fontSize;
+
+        if (tok.sup || tok.sub) fSize = Math.round(fontSize * 0.76);
+
+        let styleStr = tok.italic ? "italic " : "";
+
+        ctx.font = `${styleStr}${fSize}px ${fontFamily}`;
+
+        const w = ctx.measureText(tok.text).width;
+
+        widths.push(w);
+
+        totalW += w;
+
+      }
+
+
+
+      let startX = x;
+
+      if (align === "center") {
+
+        startX = x - totalW / 2;
+
+      } else if (align === "right") {
+
+        startX = x - totalW;
+
+      }
+
+
+
+      let curX = startX;
+
+      tokens.forEach((tok, idx) => {
+
+        let fSize = fontSize;
+
+        let yOffset = 0;
+
+        if (tok.sup) {
+
+          fSize = Math.round(fontSize * 0.76);
+
+          yOffset = -fontSize * 0.42;
+
+        } else if (tok.sub) {
+
+          fSize = Math.round(fontSize * 0.76);
+
+          yOffset = fontSize * 0.22;
+
+        }
+
+        let styleStr = tok.italic ? "italic " : "";
+
+        ctx.font = `${styleStr}${fSize}px ${fontFamily}`;
+
+        ctx.fillText(tok.text, curX, y + yOffset);
+
+        curX += widths[idx];
+
+      });
+
+      ctx.restore();
+
+    }
+
+
+
+    function measureHtmlText(ctx, html) {
+
+      ctx.save();
+
+      const font = ctx.font || "11px Segoe UI";
+
+      const matches = font.match(/(\d+)px/);
+
+      const fontSize = matches ? parseInt(matches[1], 10) : 11;
+
+      const fontFamily = font.replace(/^\d+px\s+/, "");
+
+      const regex = /(<\/?[a-z0-9]+>)/gi;
+
+      const parts = html.split(regex);
+
+      let currentStyle = { sup: false, sub: false, italic: false };
+
+      let totalW = 0;
+
+      for (const part of parts) {
+
+        if (!part) continue;
+
+        if (part.toLowerCase() === "<sup>") { currentStyle.sup = true; }
+
+        else if (part.toLowerCase() === "</sup>") { currentStyle.sup = false; }
+
+        else if (part.toLowerCase() === "<sub>") { currentStyle.sub = true; }
+
+        else if (part.toLowerCase() === "</sub>") { currentStyle.sub = false; }
+
+        else if (part.toLowerCase() === "<i>") { currentStyle.italic = true; }
+
+        else if (part.toLowerCase() === "</i>") { currentStyle.italic = false; }
+
+        else if (part.startsWith("<")) { /* ignore */ }
+
+        else {
+
+          let fSize = fontSize;
+
+          if (currentStyle.sup || currentStyle.sub) fSize = Math.round(fontSize * 0.76);
+
+          let styleStr = currentStyle.italic ? "italic " : "";
+
+          ctx.font = `${styleStr}${fSize}px ${fontFamily}`;
+
+          totalW += ctx.measureText(part).width;
+
+        }
+
+      }
+
+      ctx.restore();
+
+      return totalW;
+
+    }
+
+
+
+    function formatAxisNumber(v, digits = 2) {
+
+      if (!Number.isFinite(v)) return "-";
+
+      if (Math.abs(v) < 1e-12) return "0";
+
+      const abs = Math.abs(v);
+
+      if (abs >= 100) return v.toFixed(0);
+
+      if (abs >= 10) return v.toFixed(1).replace(/\.0$/, "");
+
+      return v.toFixed(digits).replace(/\.?0+$/, "");
+
+    }
+
+
+
+    function scaledAxis(vals) {
+
+      const finite = vals.filter((v) => Number.isFinite(v) && Math.abs(v) > 0);
+
+      if (!finite.length) return {scale: 1, exp: 0};
+
+      const maxAbs = Math.max(...finite.map((v) => Math.abs(v)));
+
+      const exp = maxAbs >= 1e4 || maxAbs < 0.1 ? Math.floor(Math.log10(maxAbs)) : 0;
+
+      return {scale: Math.pow(10, exp), exp};
+
+    }
+
+
+
+    function drawCornerScale(ctx, text, x, y, color = "#66707d", align = "right") {
+
+      if (!text) return;
+
+      ctx.save();
+
+      ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+
+      const tw = measureHtmlText(ctx, text);
+
+      const left = align === "right" ? x - tw - 5 : x - 5;
+
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
+
+      ctx.fillRect(left, y - 13, tw + 10, 17);
+
+      ctx.fillStyle = color;
+
+      drawHtmlText(ctx, text, x, y, align);
+
+      ctx.restore();
+
+    }
+
+
+
+    function formatRangeSciHtml(v, digits = 1) {
+
+      if (!Number.isFinite(v)) return "-";
+
+      const str = v.toExponential(digits);
+
+      const parts = str.split("e");
+
+      const base = parts[0];
+
+      const exp = parseInt(parts[1], 10);
+
+      return `${base} × 10<sup>${exp}</sup>`;
+
+    }
+
+
+
+    function buildFamilyControls() {
+
+      familyRoot.innerHTML = "";
+
+      defaults.forEach((fam, idx) => {
+
+        const row = document.createElement("div");
+
+        row.className = "family-row";
+
+        row.innerHTML = `
+
+          <div class="family-head">
+
+            <span><span class="swatch" style="background:${colors[idx]}"></span>${fam.name}</span>
+
+            <input id="fam${idx}Enabled" type="checkbox" ${fam.enabled ? "checked" : ""} aria-label="${fam.name} enabled">
+
+          </div>
+
+          <div class="family-grid">
+
+            <div class="mini-field">
+
+              <label for="fam${idx}N">N<sub>sheet</sub> (10<sup>12</sup> cm<sup>-2</sup>)</label>
+
+              <input id="fam${idx}N" type="number" min="0" step="0.001" value="${fam.n12}">
+
+            </div>
+
+            <div class="mini-field">
+
+              <label for="fam${idx}Sigma">俘获截面 <i>&sigma;</i> (cm<sup>2</sup>)</label>
+
+              <input id="fam${idx}Sigma" type="number" min="1e-50" step="1e-35" value="${fam.sigma}">
+
+            </div>
+
+            <div class="mini-field">
+
+              <label for="fam${idx}X">深度 <i>x</i> (nm)</label>
+
+              <input id="fam${idx}X" type="number" min="0.05" max="10" step="0.05" value="${fam.x}">
+
+            </div>
+
+            <div class="mini-field">
+
+              <label for="fam${idx}Et">能级 <i>E</i><sub>t</sub> (eV)</label>
+
+              <input id="fam${idx}Et" type="number" step="0.01" value="${fam.et !== undefined ? fam.et : 0.0}">
+
+            </div>
+
+          </div>
+
+          <div id="fam${idx}TauEff" class="tau-readout"><i>&tau;</i><sub>eff</sub> -</div>
+
+        `;
+
+        familyRoot.appendChild(row);
+
+      });
+
+    }
+
+
+
+    function readNumber(id, fallback) {
+
+      const v = Number(el(id).value);
+
+      return Number.isFinite(v) ? v : fallback;
+
+    }
+
+
+
+    function readState() {
+
+      const phiB = readNumber("phiB", REF_PHI_B);
+
+      const mOx = readNumber("mOx", REF_MOX);
+
+      const mSiC = readNumber("mSiC", REF_MSIC);
+
+      const areaCm2 = Math.max(1e-12, readNumber("areaCm2", 1));
+
+
+
+      const tox = Math.max(1e-6, readNumber("tox", 42));
+
+      const vg = readNumber("vg", 38);
+
+      const fieldMvCm = 10 * vg / tox;
+
+      const timeLog = readNumber("timeSlider", 3);
+
+      const time = Math.pow(10, timeLog);
+
+      const endTime = Math.max(1, readNumber("timeEnd", 1e6));
+
+      const tauMode = "energy";
+
+      const tempK = Math.max(1, readNumber("tempK", DEFAULT_TEMP_K));
+
+      const tauGamma = Math.max(0, readNumber("tauGamma", 0.35));
+
+      const tauFieldBeta = Math.max(0, readNumber("tauFieldBeta", 0.08));
+
+      const energyBending = false;
+
+      const kmcDeviceLengthNm = clamp(readNumber("kmcDeviceLengthNm", 50), 8, 240);
+
+      const kmcCellNm = KMC_CELL_NM;
+
+      const kmcCols = Math.max(2, Math.round(kmcDeviceLengthNm / kmcCellNm));
+
+      const kmcRows = Math.max(2, Math.round(tox / kmcCellNm));
+
+      const s3Enabled = el("scheme3Enabled").checked;
+      el("scheme3Inputs").style.display = s3Enabled ? "block" : "none";
+      const s3N0 = readNumber("scheme3N0", 2.0);
+      const s3Xdecay = Math.max(0.01, readNumber("scheme3Xdecay", 0.3));
+
+      const families = defaults.map((fam, idx) => {
+
+        const x = Math.max(0.01, readNumber(`fam${idx}X`, fam.x));
+
+        const et = readNumber(`fam${idx}Et`, fam.et !== undefined ? fam.et : 0.0);
+
+        let n12 = 0;
+        if (s3Enabled) {
+          el(`fam${idx}N`).disabled = true;
+          n12 = s3N0 * Math.exp(-x / s3Xdecay);
+          el(`fam${idx}N`).value = n12.toFixed(4);
+        } else {
+          el(`fam${idx}N`).disabled = false;
+          n12 = Math.max(0, readNumber(`fam${idx}N`, fam.n12));
+        }
+
+        const sigma = Math.max(1e-50, readNumber(`fam${idx}Sigma`, fam.sigma));
+
+        const res = effectiveTau({
+
+          sigma,
+
+          x,
+
+          tauMode,
+
+          tempK,
+
+          fieldMvCm,
+
+          phiB,
+
+          mSiC,
+
+          et,
+
+          energyBending,
+
+          mOx,
+
+          tauGamma
+
+        });
+
+        return {
+
+          name: fam.name,
+
+          enabled: el(`fam${idx}Enabled`).checked,
+
+          n12,
+
+          sigma,
+
+          tau: res.tauEff,
+
+          tauEff: res.tauEff,
+
+          fInf: res.fInf,
+
+          qcap: n12 * 1e16 * Q,
+
+          rate: 1 / res.tauEff,
+
+          x,
+
+          et,
+
+          color: colors[idx]
+
+        };
+
+      });
+
+      return {
+
+        vg,
+
+        tox,
+
+        phiB,
+
+        mOx,
+
+        mSiC,
+
+        areaCm2,
+
+        areaM2: areaCm2 * 1e-4,
+
+
+
+        epsRel: readNumber("epsOx", 3.9),
+
+        minFieldMvCm: Math.max(1e-6, readNumber("minField", 0.1)),
+
+        fieldMvCm,
+
+        e0Vm: fieldMvCm * 1e8,
+
+        time,
+
+        endTime,
+
+        tauMode,
+
+        tempK,
+
+        tauGamma,
+
+        tauFieldBeta,
+
+        energyBending,
+
+        families,
+
+        toxMc: {
+
+          enabled: el("toxMcEnabled").checked,
+
+          devices: Math.round(clamp(readNumber("toxMcDevices", 24), 2, 80)),
+
+          patches: Math.round(clamp(readNumber("toxMcPatches", 32), 1, 120)),
+
+          sigmaDeviceNm: Math.max(0, readNumber("toxMcSigmaDevice", 0.08)),
+
+          sigmaLocalNm: Math.max(0, readNumber("toxMcSigmaLocal", 0.12)),
+
+          seed: Math.round(readNumber("toxMcSeed", 20260609)),
+
+          curveCount: Math.round(clamp(readNumber("toxMcCurveCount", 10), 0, 24))
+
+        },
+
+        kmc: {
+
+          enabled: el("kmcEnabled").checked,
+
+          seed: Math.round(readNumber("kmcSeed", 20260608)),
+
+          cols: kmcCols,
+
+          rows: kmcRows,
+
+          deviceLengthNm: kmcCols * kmcCellNm,
+
+          oxideThicknessNm: kmcRows * kmcCellNm,
+
+          cellNm: kmcCellNm,
+
+          p0: clamp(readNumber("kmcP0", 2.0) / 100, 0, 0.3),
+
+          k0: Math.pow(10, clamp(readNumber("kmcLogK0", -6.4), -14, 2)),
+
+          logK0: clamp(readNumber("kmcLogK0", -6.4), -14, 2),
+
+          alpha: Math.max(0, readNumber("kmcAlpha", 0.75)),
+
+          neighborBoost: Math.max(0, readNumber("kmcNeighborBoost", 2.6)),
+
+          maxEvents: Math.round(clamp(readNumber("kmcMaxEvents", 1600), 1, 10000)),
+
+          bdGain: Math.max(1, readNumber("kmcBdGain", 1e6))
+
+        }
+
+      };
+
+    }
+
+
+
+    function fermiDiracHalf(eta) {
+
+      if (eta < -8.0) return Math.exp(eta);
+
+      if (eta > 8.0) {
+
+        return (4.0 / (3.0 * Math.sqrt(Math.PI))) * Math.pow(eta, 1.5) * (1.0 + Math.PI * Math.PI / (8.0 * eta * eta));
+
+      }
+
+      const integrand = (eps) => {
+
+        const arg = clamp(eps - eta, -100.0, 100.0);
+
+        return Math.sqrt(eps) / (1.0 + Math.exp(arg));
+
+      };
+
+      const upper = Math.max(80.0, eta + 80.0);
+
+      const steps = 200;
+
+      let sum = 0;
+
+      for (let i = 0; i <= steps; i++) {
+
+        const eps = (upper * i) / steps;
+
+        const val = integrand(eps);
+
+        const weight = (i === 0 || i === steps) ? 0.5 : 1.0;
+
+        sum += val * weight;
+
+      }
+
+      const value = sum * (upper / steps);
+
+      return (2.0 / Math.sqrt(Math.PI)) * value;
+
+    }
+
+
+
+    function fermiDiracThreeHalves(eta) {
+
+      if (eta < -8.0) return Math.exp(eta);
+
+      if (eta > 8.0) {
+
+        return (8.0 / (15.0 * Math.sqrt(Math.PI))) * Math.pow(eta, 2.5) * (1.0 + 5.0 * Math.PI * Math.PI / (8.0 * eta * eta));
+
+      }
+
+      const integrand = (eps) => {
+
+        const arg = clamp(eps - eta, -100.0, 100.0);
+
+        return Math.pow(eps, 1.5) / (1.0 + Math.exp(arg));
+
+      };
+
+      const upper = Math.max(80.0, eta + 80.0);
+
+      const steps = 200;
+
+      let sum = 0;
+
+      for (let i = 0; i <= steps; i++) {
+
+        const eps = (upper * i) / steps;
+
+        const val = integrand(eps);
+
+        const weight = (i === 0 || i === steps) ? 0.5 : 1.0;
+
+        sum += val * weight;
+
+      }
+
+      const value = sum * (upper / steps);
+
+      return (4.0 / (3.0 * Math.sqrt(Math.PI))) * value;
+
+    }
+
+
+
+    function solveSurfaceEtaFD(eoxMvCm, tempK) {
+
+      const eoxVPerM = Math.max(1e3, eoxMvCm * 1e8);
+
+      const epsOx = 3.9 * EPS0;
+
+      const epsSiC = 9.7 * EPS0;
+
+      const ND_M3 = 1.1e22;
+
+      const NC_M3 = 1.8e25;
+
+      const Q_val = Q;
+
+
+
+      const kT = KB_EV * tempK * Q_val;
+
+      const Target = epsOx * epsOx * eoxVPerM * eoxVPerM;
+
+
+
+      const ecBulkMinusEf_eV = (KB_EV * tempK) * Math.log(1.8e19 / 1.1e16);
+
+      const eta_b = -ecBulkMinusEf_eV / (KB_EV * tempK);
+
+
+
+      const BoltzmannQsTarget = (epsOx * eoxVPerM) * (epsOx * eoxVPerM) / (2 * epsSiC * kT * ND_M3);
+
+      let u = Math.log(BoltzmannQsTarget + 1);
+
+      for (let step = 0; step < 4; step++) {
+
+        const fu = Math.exp(u) - u - 1 - BoltzmannQsTarget;
+
+        const dfu = Math.exp(u) - 1;
+
+        u = u - fu / dfu;
+
+      }
+
+      const psiS_initial = Math.max(0.01, u * (KB_EV * tempK));
+
+      let eta = eta_b + psiS_initial / (KB_EV * tempK);
+
+
+
+      const F32_b = fermiDiracThreeHalves(eta_b);
+
+      for (let step = 0; step < 6; step++) {
+
+        const F12 = fermiDiracHalf(eta);
+
+        const F32 = fermiDiracThreeHalves(eta);
+
+        const f = 2 * epsSiC * kT * (NC_M3 * (F32 - F32_b) - ND_M3 * (eta - eta_b)) - Target;
+
+        const df = 2 * epsSiC * kT * Math.max(1e18, NC_M3 * F12 - ND_M3);
+
+        const delta = f / df;
+
+        eta = Math.max(eta_b + 1e-3, eta - clamp(delta, -10, 10));
+
+      }
+
+      return eta;
+
+    }
+
+
+
+    function solvePsiS(eoxMvCm, tempK) {
+
+      const eta = solveSurfaceEtaFD(eoxMvCm, tempK);
+
+      const ecBulkMinusEf_eV = (KB_EV * tempK) * Math.log(1.8e19 / 1.1e16);
+
+      const eta_b = -ecBulkMinusEf_eV / (KB_EV * tempK);
+
+      return (eta - eta_b) * (KB_EV * tempK);
+
+    }
+
+
+
+    function getSurfaceEta(eoxMvCm, tempK) {
+
+      return solveSurfaceEtaFD(eoxMvCm, tempK);
+
+    }
+
+
+
+    function calculateNs(eoxMvCm, tempK) {
+
+      const NC_CM3 = 1.8e19;
+
+      const eta = getSurfaceEta(eoxMvCm, tempK);
+
+      return NC_CM3 * fermiDiracHalf(eta);
+
+    }
+
+
+
+    function wkbFieldExponent(xNm, eoxMvCm, barrierEv, mEffRel) {
+
+      const xM = xNm * 1e-9;
+
+      const eoxVPerM = eoxMvCm * 1e8;
+
+      const phiJ = barrierEv * Q;
+
+      let residualBarrierJ = phiJ - Q * eoxVPerM * xM;
+
+      if (residualBarrierJ < 0) residualBarrierJ = 0;
+
+      const mTunnelKg = mEffRel * M0;
+
+      const prefactor = (4.0 * Math.sqrt(2.0 * mTunnelKg)) / (3.0 * HBAR * Q * eoxVPerM);
+
+      return prefactor * (Math.pow(phiJ, 1.5) - Math.pow(residualBarrierJ, 1.5));
+
+    }
+
+
+
+    function effectiveTau(params) {
+
+      const NC_CM3 = 1.8e19;
+
+      const eta = getSurfaceEta(params.fieldMvCm, params.tempK);
+
+      const ns = NC_CM3 * fermiDiracHalf(eta); // cm^-3
+
+      const m_eff = params.mSiC * M0; // kg
+
+      // 3D thermal velocity: v_th = sqrt(8 * k_B * T / (pi * m^*))
+      // k_B = 1.380649e-23 J/K
+      const kB = 1.380649e-23;
+
+      const vth = Math.sqrt(8.0 * kB * params.tempK / (Math.PI * m_eff)) * 100.0; // cm/s
+
+      // WKB tunneling decay: kappa = sqrt(2 * m_ox * (Phi_B - E_t - 0.5 * q * E_eff * x)) / hbar (m^-1)
+      // The average barrier height is reduced by the potential drop across the tunneling path under field E_eff.
+      // Average potential drop = 0.5 * E_eff * x (V)
+      // Since E_eff is in MV/cm and x is in nm:
+      // average potential drop (eV) = 0.5 * (E_eff * 10^8 V/m) * (x * 10^-9 m) = 0.05 * E_eff * x
+      const mOxKg = params.mOx * M0;
+      const fieldMvCm = params.fieldMvCm || 0;
+      const xNm = params.x || 0.1;
+      const barrierReduction = 0.05 * fieldMvCm * xNm;
+      const barrierEv = Math.max(0.05, params.phiB - (params.et || 0) - barrierReduction);
+      const phiJ = barrierEv * Q;
+      const kappa = Math.sqrt(2.0 * mOxKg * phiJ) / HBAR; // m^-1
+      const kappaNm = kappa * 1e-9;                        // nm^-1
+
+      // Multi-phonon emission / Lattice relaxation capture cross-section correction:
+      // If et < 0 (defect level below Ec), the capture cross section reduces due to lattice relaxation activation energy Ea.
+      // Ea = 0.15 * |et| (eV)
+      let sigmaEff = params.sigma;
+      const et = params.et || 0;
+      if (et < 0) {
+        const kB_ev = 8.617333262e-5; // eV/K
+        const Ea = 0.15 * Math.abs(et);
+        sigmaEff = params.sigma * Math.exp(-Ea / (kB_ev * params.tempK));
+      }
+
+      // tau_eff = (1 / sigma_eff / v_th / n_s) * exp(2*kappa*x)
+      const tauC0 = 1.0 / Math.max(1e-100, sigmaEff * vth * ns);
+
+      const exponent = clamp(2.0 * kappaNm * params.x, -50, 50);
+
+      const tauC = tauC0 * Math.exp(exponent);
+
+      const tauEff = clamp(tauC, 1e-12, 1e20);
+
+      return { tauEff, fInf: 1.0, kappaNm };
+
+    }
+
+
+
+    function defaultBFnVm(phiBEv, mOxRel) {
+
+      const phiJ = phiBEv * Q;
+
+      const mOx = mOxRel * M0;
+
+      return (4 * Math.sqrt(2 * mOx) / (3 * Q * HBAR)) * Math.pow(phiJ, 1.5);
+
+    }
+
+
+
+    function defaultAFn(mSiCRel, mOxRel, phiBEv) {
+
+      const h = 2 * Math.PI * HBAR;
+
+      const phiJ = Math.max(phiBEv * Q, 1e-30);
+
+      return Math.pow(Q, 3) * Math.max(mSiCRel, 1e-12) / (8 * Math.PI * h * Math.max(mOxRel, 1e-12) * phiJ);
+
+    }
+
+
+
+    function computeAtTime(state, t) {
+
+      const epsOx = state.epsRel * EPS0;
+
+      let qdef = 0;
+
+      const fills = [];
+
+      const tauEffs = [];
+
+      let totalShielding = 0;
+
+      for (const fam of state.families) {
+
+        const tauEff = Math.max(1e-12, fam.tauEff || fam.tau);
+
+        const fInf = fam.fInf !== undefined ? fam.fInf : 1.0;
+
+        const fill = fam.enabled ? fInf * (1 - Math.exp(-t / tauEff)) : 0;
+
+        fills.push(fill);
+
+        tauEffs.push(tauEff);
+
+        qdef += fam.qcap * fill;
+
+        const screenFactor = clamp((state.tox - fam.x) / Math.max(state.tox, 1e-9), 0, 1);
+        totalShielding += (fam.qcap * fill / epsOx) * screenFactor;
+
+      }
+
+      const minVm = state.minFieldMvCm * 1e8;
+
+      const eEffVm = Math.max(state.e0Vm - totalShielding, minVm);
+
+      const bFn = defaultBFnVm(state.phiB, state.mOx);
+
+      const aFn = defaultAFn(state.mSiC, state.mOx, state.phiB);
+
+      const logPrefactor = Math.log(Math.max(aFn * state.areaM2, 1e-300));
+
+      const logNo = logPrefactor + 2 * Math.log(Math.max(state.e0Vm, 1)) - bFn / Math.max(state.e0Vm, 1);
+
+      const logI = logPrefactor + 2 * Math.log(Math.max(eEffVm, 1)) - bFn / Math.max(eEffVm, 1);
+
+      const current = Math.exp(clamp(logI, -745, 709));
+
+      const noDefect = Math.exp(clamp(logNo, -745, 709));
+
+      const widthNm = state.phiB / Math.max(eEffVm / 1e9, 1e-12);
+
+      const widthNoNm = state.phiB / Math.max(state.e0Vm / 1e9, 1e-12);
+
+      const injectionScreenFactor = qdef === 0 ? 0 : (totalShielding * epsOx) / Math.max(Math.abs(qdef), 1e-30);
+
+      return {
+
+        qdef,
+
+        eEffVm,
+
+        injectionScreenFactor,
+
+        bFn,
+
+        aFn,
+
+        current,
+
+        noDefect,
+
+        log10Current: logI / Math.LN10,
+
+        log10NoDefect: logNo / Math.LN10,
+
+        ratio: current / noDefect,
+
+        widthNm,
+
+        widthNoNm,
+
+        fills,
+
+        tauEffs
+
+      };
+
+    }
+
+
+
+    function sampleCurves(state) {
+
+      let tMin = 1e-3;
+
+      let tMax = state.endTime;
+
+      if (importedData && importedData.t && importedData.t.length > 0) {
+
+        tMin = importedData.t[0];
+
+        tMax = Math.max(importedData.t[importedData.t.length - 1] * 1.02, state.time);
+
+      }
+
+      const logMin = Math.log10(tMin);
+
+      const logMax = Math.log10(Math.max(tMax, tMin * 10));
+
+      const t = logspace(logMin, logMax, 360);
+
+      const current = [];
+
+      const noDefect = [];
+
+      const eEff = [];
+
+      const qdef = [];
+
+      const log10Current = [];
+
+      const log10NoDefect = [];
+
+      const ratio = [];
+
+      for (const x of t) {
+
+        const c = computeAtTime(state, x);
+
+        current.push(c.current);
+
+        noDefect.push(c.noDefect);
+
+        eEff.push(c.eEffVm / 1e8);
+
+        qdef.push(c.qdef);
+
+        log10Current.push(c.log10Current);
+
+        log10NoDefect.push(c.log10NoDefect);
+
+        ratio.push(c.ratio);
+
+      }
+
+      return {t, current, noDefect, eEff, qdef, log10Current, log10NoDefect, ratio};
+
+    }
+
+    function gaussianRandom(rng) {
+
+      const u1 = Math.max(1e-12, rng());
+
+      const u2 = rng();
+
+      return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+
+    }
+
+    function quantileSorted(sorted, q) {
+
+      if (!sorted.length) return NaN;
+
+      const pos = clamp(q, 0, 1) * (sorted.length - 1);
+
+      const lo = Math.floor(pos);
+
+      const hi = Math.ceil(pos);
+
+      if (lo === hi) return sorted[lo];
+
+      const frac = pos - lo;
+
+      return sorted[lo] * (1 - frac) + sorted[hi] * frac;
+
+    }
+
+    function cloneStateForLocalTox(baseState, toxNm, areaWeight) {
+
+      const tox = Math.max(0.2, toxNm);
+
+      const vg = baseState.vg;
+
+      const fieldMvCm = 10 * vg / tox;
+
+      const families = baseState.families.map((fam) => {
+
+        const x = Math.min(fam.x, Math.max(0.01, tox - 1e-3));
+
+        const res = effectiveTau({
+
+          sigma: fam.sigma,
+
+          x,
+
+          tauMode: baseState.tauMode,
+
+          tempK: baseState.tempK,
+
+          fieldMvCm,
+
+          phiB: baseState.phiB,
+
+          mSiC: baseState.mSiC,
+
+          et: fam.et,
+
+          energyBending: baseState.energyBending,
+
+          mOx: baseState.mOx,
+
+          tauGamma: baseState.tauGamma
+
+        });
+
+        return {
+
+          ...fam,
+
+          x,
+
+          tauEff: res.tauEff,
+
+          fInf: res.fInf,
+
+          qcap: fam.n12 * 1e16 * Q,
+
+          rate: 1 / res.tauEff
+
+        };
+
+      });
+
+      return {
+
+        ...baseState,
+
+        tox,
+
+        fieldMvCm,
+
+        e0Vm: fieldMvCm * 1e8,
+
+        areaCm2: baseState.areaCm2 * areaWeight,
+
+        areaM2: baseState.areaM2 * areaWeight,
+
+        families
+
+      };
+
+    }
+
+    function simulateToxMonteCarlo(state, times, kmcResult = null) {
+
+      const cfg = state.toxMc;
+
+      if (!cfg || !cfg.enabled || !times || !times.length) return null;
+
+      const rng = makeRng(cfg.seed);
+
+      const devices = [];
+
+      const deviceMeanTox = [];
+
+      const deviceCurves = [];
+
+      const areaWeight = 1 / Math.max(1, cfg.patches);
+
+      for (let d = 0; d < cfg.devices; d += 1) {
+
+        const deviceOffset = gaussianRandom(rng) * cfg.sigmaDeviceNm;
+
+        const patchStates = [];
+
+        let toxSum = 0;
+
+        for (let p = 0; p < cfg.patches; p += 1) {
+
+          const localOffset = gaussianRandom(rng) * cfg.sigmaLocalNm;
+
+          const toxLocal = Math.max(0.2, state.tox + deviceOffset + localOffset);
+
+          toxSum += toxLocal;
+
+          patchStates.push(cloneStateForLocalTox(state, toxLocal, areaWeight));
+
+        }
+
+        deviceMeanTox.push(toxSum / Math.max(1, cfg.patches));
+
+        devices.push(patchStates);
+
+        deviceCurves.push(new Array(times.length).fill(0));
+
+      }
+
+      const p5 = [];
+
+      const p50 = [];
+
+      const p95 = [];
+
+      times.forEach((time, timeIdx) => {
+
+        const values = devices.map((patchStates, deviceIdx) => {
+
+          let current = 0;
+
+          for (const patchState of patchStates) {
+
+            current += computeAtTime(patchState, time).current;
+
+          }
+
+          deviceCurves[deviceIdx][timeIdx] = current;
+
+          return current;
+
+        }).sort((a, b) => a - b);
+
+        p5.push(quantileSorted(values, 0.05));
+
+        p50.push(quantileSorted(values, 0.50));
+
+        p95.push(quantileSorted(values, 0.95));
+
+      });
+
+      const nominalTbd = kmcResult && kmcResult.formed && Number.isFinite(kmcResult.breakdownTime) && kmcResult.breakdownTime > 0
+
+        ? kmcResult.breakdownTime
+
+        : state.endTime;
+
+      const nominalFieldMvCm = Math.max(1e-9, state.fieldMvCm);
+
+      const breakdownTimes = deviceMeanTox.map((toxMean) => {
+
+        const deviceFieldMvCm = 10 * state.vg / Math.max(toxMean, 1e-9);
+
+        const fieldShift = deviceFieldMvCm - nominalFieldMvCm;
+
+        return clamp(nominalTbd * Math.exp(-state.kmc.alpha * fieldShift), 1e-12, 1e30);
+
+      });
+
+      const weibull = buildWeibullData(breakdownTimes);
+
+      const shownCurveCount = Math.min(cfg.curveCount, deviceCurves.length);
+
+      return {
+
+        t: times,
+
+        p5,
+
+        p50,
+
+        p95,
+
+        deviceCurves: deviceCurves.slice(0, shownCurveCount),
+
+        breakdownTimes,
+
+        weibull,
+
+        minTox: Math.min(...deviceMeanTox),
+
+        maxTox: Math.max(...deviceMeanTox),
+
+        devices: cfg.devices,
+
+        patches: cfg.patches,
+
+        sigmaDeviceNm: cfg.sigmaDeviceNm,
+
+        sigmaLocalNm: cfg.sigmaLocalNm
+
+      };
+
+    }
+
+    function buildWeibullData(times) {
+
+      const sorted = times.filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
+
+      const n = sorted.length;
+
+      if (n < 2) return null;
+
+      const x = [];
+
+      const y = [];
+
+      const f = [];
+
+      sorted.forEach((time, idx) => {
+
+        const rank = idx + 1;
+
+        const failure = (rank - 0.3) / (n + 0.4);
+
+        f.push(failure);
+
+        x.push(Math.log(time));
+
+        y.push(Math.log(-Math.log(1 - failure)));
+
+      });
+
+      const xMean = x.reduce((a, b) => a + b, 0) / n;
+
+      const yMean = y.reduce((a, b) => a + b, 0) / n;
+
+      let sxx = 0;
+
+      let sxy = 0;
+
+      let syy = 0;
+
+      for (let i = 0; i < n; i += 1) {
+
+        const dx = x[i] - xMean;
+
+        const dy = y[i] - yMean;
+
+        sxx += dx * dx;
+
+        sxy += dx * dy;
+
+        syy += dy * dy;
+
+      }
+
+      const beta = sxx > 0 ? sxy / sxx : NaN;
+
+      const intercept = yMean - beta * xMean;
+
+      const eta = Number.isFinite(beta) && beta !== 0 ? Math.exp(-intercept / beta) : NaN;
+
+      const r2 = sxx > 0 && syy > 0 ? (sxy * sxy) / (sxx * syy) : NaN;
+
+      const fitY = x.map((value) => intercept + beta * value);
+
+      return {time: sorted, x, y, f, fitY, beta, eta, r2};
+
+    }
+
+
+
+    function detectBreakdown(t, current, jumpFactor = 1000.0, currentMin = 1e-6) {
+
+      for (let i = 1; i < current.length; i++) {
+
+        const prev = current[i - 1];
+
+        const curr = current[i];
+
+        const ratio = curr / Math.max(prev, 1e-300);
+
+        if (ratio > jumpFactor && curr > currentMin) {
+
+          return i;
+
+        }
+
+      }
+
+      return current.length;
+
+    }
+
+
+
+    function calculateFitError(state) {
+
+      if (!importedData || !importedData.t || importedData.t.length === 0) {
+
+        return null;
+
+      }
+
+      const bdIdx = detectBreakdown(importedData.t, importedData.current, 1000.0, 1e-6);
+
+      if (bdIdx <= 1) return null;
+
+      const logExperimental = [];
+
+      const experimentalTimes = [];
+
+      let minLogI = Infinity;
+
+      let maxLogI = -Infinity;
+
+      for (let i = 0; i < bdIdx; i++) {
+
+        const rawCurrent = importedData.current[i];
+
+        if (!Number.isFinite(rawCurrent) || rawCurrent <= 0) continue;
+
+        const val = Math.log10(rawCurrent);
+
+        logExperimental.push(val);
+
+        experimentalTimes.push(importedData.t[i]);
+
+        if (val < minLogI) minLogI = val;
+
+        if (val > maxLogI) maxLogI = val;
+
+      }
+
+      if (logExperimental.length < 2 || minLogI === maxLogI) return null;
+
+      const M = Math.min(100, logExperimental.length);
+
+      let sumSqRes = 0;
+
+      let sumSqTotal = 0;
+
+      let logYSum = 0;
+
+      const sampledLogExp = [];
+
+      const sampledTimes = [];
+
+      for (let j = 0; j < M; j++) {
+
+        const targetLogI = minLogI + (maxLogI - minLogI) * (M === 1 ? 0 : j / (M - 1));
+
+        let bestIdx = 0;
+
+        let minDiff = Infinity;
+
+        for (let i = 0; i < logExperimental.length; i++) {
+
+          const diff = Math.abs(logExperimental[i] - targetLogI);
+
+          if (diff < minDiff) {
+
+            minDiff = diff;
+
+            bestIdx = i;
+
+          }
+
+        }
+
+        sampledLogExp.push(logExperimental[bestIdx]);
+
+        sampledTimes.push(experimentalTimes[bestIdx]);
+
+        logYSum += logExperimental[bestIdx];
+
+      }
+
+      const meanLogExp = logYSum / M;
+
+      for (let j = 0; j < M; j++) {
+
+        const expVal = sampledLogExp[j];
+
+        const tVal = sampledTimes[j];
+
+        const m = computeAtTime(state, tVal);
+
+        if (!Number.isFinite(m.current) || m.current <= 0) return null;
+
+        const modelVal = Math.log10(m.current);
+
+        if (!Number.isFinite(modelVal)) return null;
+
+        const res = expVal - modelVal;
+
+        sumSqRes += res * res;
+
+        const dev = expVal - meanLogExp;
+
+        sumSqTotal += dev * dev;
+
+      }
+
+      const rmseLog10 = Math.sqrt(sumSqRes / M);
+
+      const r2 = sumSqTotal > 0 ? (1 - sumSqRes / sumSqTotal) : 0;
+
+      const rmseLn = rmseLog10 * Math.LN10;
+
+      return {
+
+        rmseLog10,
+
+        rmseLn,
+
+        r2,
+
+        points: M
+
+      };
+
+    }
+
+
+
+    function importedBreakdownTime() {
+
+      if (!importedData || !importedData.t || importedData.t.length < 3) return null;
+
+      const idx = detectBreakdown(importedData.t, importedData.current, 1000.0, 1e-6);
+
+      if (idx <= 0 || idx >= importedData.t.length) return null;
+
+      const tbd = importedData.t[idx];
+
+      return Number.isFinite(tbd) && tbd > 0 ? tbd : null;
+
+    }
+
+
+
+    function cloneStateWithFitVector(baseState, vector, variables) {
+
+      let vg = baseState.vg;
+
+      const draftFamilies = baseState.families.map((fam) => ({...fam}));
+
+      variables.forEach((variable, idx) => {
+
+        const value = vector[idx];
+
+        if (variable.kind === "vg") {
+
+          vg = value;
+
+          return;
+
+        }
+
+        const fam = draftFamilies[variable.idx];
+
+        if (!fam) return;
+
+        if (variable.kind === "n") {
+
+          fam.n12 = Math.pow(10, value);
+
+        } else if (variable.kind === "x") {
+
+          fam.x = value;
+
+        }
+
+      });
+
+      const fieldMvCm = 10 * vg / Math.max(baseState.tox, 1e-9);
+
+      const families = draftFamilies.map((fam) => {
+
+        if (!fam.enabled) {
+
+          return {...fam};
+
+        }
+
+        const res = effectiveTau({
+
+          sigma: fam.sigma,
+
+          x: fam.x,
+
+          tauMode: baseState.tauMode,
+
+          tempK: baseState.tempK,
+
+          fieldMvCm,
+
+          phiB: baseState.phiB,
+
+          mSiC: baseState.mSiC,
+
+          et: fam.et,
+
+          energyBending: baseState.energyBending,
+
+          mOx: baseState.mOx,
+
+          tauGamma: baseState.tauGamma
+
+        });
+
+        return {
+
+          ...fam,
+
+          tauEff: res.tauEff,
+
+          fInf: res.fInf,
+
+          qcap: fam.n12 * 1e16 * Q,
+
+          rate: 1 / res.tauEff
+
+        };
+
+      });
+
+      return {...baseState, vg, fieldMvCm, e0Vm: fieldMvCm * 1e8, families};
+
+    }
+
+
+
+    function collectFitSamples(maxSamples = 120) {
+
+      if (!importedData || !importedData.t || importedData.t.length === 0) return null;
+
+      const bdIdx = detectBreakdown(importedData.t, importedData.current, 1000.0, 1e-6);
+
+      if (bdIdx <= 1) return null;
+
+      const valid = [];
+
+      let minLogI = Infinity;
+
+      let maxLogI = -Infinity;
+
+      for (let i = 0; i < bdIdx; i += 1) {
+
+        const current = importedData.current[i];
+
+        const time = importedData.t[i];
+
+        if (!Number.isFinite(time) || time <= 0 || !Number.isFinite(current) || current <= 0) continue;
+
+        const logI = Math.log10(current);
+
+        valid.push({time, logI});
+
+        if (logI < minLogI) minLogI = logI;
+
+        if (logI > maxLogI) maxLogI = logI;
+
+      }
+
+      if (valid.length < 3 || minLogI === maxLogI) return null;
+
+      const sampleCount = Math.min(maxSamples, valid.length);
+
+      const samples = [];
+
+      for (let j = 0; j < sampleCount; j += 1) {
+
+        const targetLogI = minLogI + (maxLogI - minLogI) * (sampleCount === 1 ? 0 : j / (sampleCount - 1));
+
+        let best = valid[0];
+
+        let bestDiff = Infinity;
+
+        for (const point of valid) {
+
+          const diff = Math.abs(point.logI - targetLogI);
+
+          if (diff < bestDiff) {
+
+            bestDiff = diff;
+
+            best = point;
+
+          }
+
+        }
+
+        samples.push(best);
+
+      }
+
+      return samples;
+
+    }
+
+
+
+    function calculateFitObjective(state, samples) {
+
+      if (!samples || samples.length < 2) return Infinity;
+
+      let sumSq = 0;
+
+      for (const sample of samples) {
+
+        const model = computeAtTime(state, sample.time);
+
+        if (!Number.isFinite(model.current) || model.current <= 0) return Infinity;
+
+        const modelLog = Math.log10(model.current);
+
+        if (!Number.isFinite(modelLog)) return Infinity;
+
+        const res = sample.logI - modelLog;
+
+        sumSq += res * res;
+
+      }
+
+      return Math.sqrt(sumSq / samples.length);
+
+    }
+
+
+
+    function fitImportedDefects(state) {
+
+      const samples = collectFitSamples(140);
+
+      if (!samples) return null;
+
+      const variables = [
+
+        {kind: "vg", min: 1, max: 80, step: 2.0}
+
+      ];
+
+      let vector = [
+
+        clamp(state.vg, 1, 80)
+
+      ];
+
+      state.families.forEach((fam, idx) => {
+
+        if (!fam.enabled) return;
+
+        variables.push({idx, kind: "n", min: -6, max: 3, step: 0.9});
+
+        variables.push({idx, kind: "x", min: 0.05, max: Math.max(0.05, Math.min(5, state.tox)), step: 0.25});
+
+      });
+
+      const startArea = state.areaCm2;
+
+      state.families.forEach((fam) => {
+
+        if (!fam.enabled) return;
+
+        vector.push(clamp(Math.log10(Math.max(fam.n12, 1e-6)), -6, 2));
+
+        vector.push(clamp(fam.x, 0.05, Math.max(0.05, Math.min(5, state.tox))));
+
+      });
+
+      const objective = (candidate) => calculateFitObjective(cloneStateWithFitVector(state, candidate, variables), samples);
+
+      let bestVector = vector.slice();
+
+      let bestRmse = objective(bestVector);
+
+      let steps = variables.map((variable) => variable.step);
+
+      for (let round = 0; round < 9; round += 1) {
+
+        let improved = false;
+
+        for (let i = 0; i < bestVector.length; i += 1) {
+
+          const bounds = variables[i];
+
+          const candidates = [-steps[i], steps[i]].map((delta) => {
+
+            const next = bestVector.slice();
+
+            next[i] = clamp(next[i] + delta, bounds.min, bounds.max);
+
+            return next;
+
+          });
+
+          for (const candidate of candidates) {
+
+            const rmse = objective(candidate);
+
+            if (rmse + 1e-8 < bestRmse) {
+
+              bestRmse = rmse;
+
+              bestVector = candidate;
+
+              improved = true;
+
+            }
+
+          }
+
+        }
+
+        if (!improved) {
+
+          steps = steps.map((value) => value * 0.55);
+
+        }
+
+      }
+
+      const fittedState = cloneStateWithFitVector(state, bestVector, variables);
+
+      el("vg").value = String(Number(fittedState.vg.toPrecision(6)));
+
+      fittedState.families.forEach((fam, idx) => {
+
+        if (!fam.enabled) return;
+
+        el(`fam${idx}N`).value = String(Number(fam.n12.toPrecision(6)));
+
+        const xInput = el(`fam${idx}X`);
+
+        if (xInput) {
+
+          xInput.value = String(Number(fam.x.toPrecision(6)));
+
+        }
+
+      });
+
+      el("areaCm2").value = String(startArea);
+
+      return {
+
+        rmseLog10: bestRmse,
+
+        rmseLn: bestRmse * Math.LN10,
+
+        areaCm2: startArea,
+
+        phiB: state.phiB,
+
+        vg: fittedState.vg,
+
+        points: samples.length,
+
+        variables: bestVector.length
+
+      };
+
+    }
+
+
+
+    function cloneStateWithKmcParams(baseState, params) {
+
+      const logK0 = clamp(params.logK0, -14, 2);
+
+      return {
+
+        ...baseState,
+
+        kmc: {
+
+          ...baseState.kmc,
+
+          enabled: true,
+
+          logK0,
+
+          k0: Math.pow(10, logK0),
+
+          alpha: Math.max(0, params.alpha),
+
+          neighborBoost: Math.max(0, params.neighborBoost)
+
+        }
+
+      };
+
+    }
+
+
+
+    function fitTddbEModel(state) {
+
+      const targetTbd = importedBreakdownTime();
+
+      if (!targetTbd) return null;
+
+      const start = {
+
+        logK0: state.kmc.logK0,
+
+        alpha: state.kmc.alpha,
+
+        neighborBoost: state.kmc.neighborBoost
+
+      };
+
+      let best = {...start};
+
+      let bestResult = simulateKmc(cloneStateWithKmcParams(state, best));
+
+      let bestScore = bestResult.formed ? Math.abs(Math.log(bestResult.breakdownTime / targetTbd)) : Infinity;
+
+      if (bestResult.formed && bestResult.breakdownTime > 0) {
+
+        const scaledLogK0 = clamp(start.logK0 + Math.log10(bestResult.breakdownTime / targetTbd), -14, 2);
+
+        const scaled = cloneStateWithKmcParams(state, {...start, logK0: scaledLogK0});
+
+        const scaledResult = simulateKmc(scaled);
+
+        if (scaledResult.formed && scaledResult.breakdownTime > 0) {
+
+          const score = Math.abs(Math.log(scaledResult.breakdownTime / targetTbd));
+
+          if (score < bestScore) {
+
+            bestScore = score;
+
+            best = {...start, logK0: scaledLogK0};
+
+            bestResult = scaledResult;
+
+          }
+
+        }
+
+      }
+
+      if (!Number.isFinite(bestScore)) return null;
+
+      el("kmcEnabled").checked = true;
+
+      el("kmcLogK0").value = String(Number(best.logK0.toPrecision(6)));
+
+      el("kmcAlpha").value = String(Number(best.alpha.toPrecision(6)));
+
+      el("kmcNeighborBoost").value = String(Number(best.neighborBoost.toPrecision(6)));
+
+      return {
+
+        targetTbd,
+
+        modelTbd: bestResult.breakdownTime,
+
+        logK0: best.logK0,
+
+        alpha: best.alpha,
+
+        neighborBoost: best.neighborBoost,
+
+        score: bestScore
+
+      };
+
+    }
+
+
+
+    function autoFitImportedData(label) {
+
+      const before = calculateFitError(readState());
+
+      const fit = fitImportedDefects(readState());
+
+      const tddbFit = fitTddbEModel(readState());
+
+      const after = calculateFitError(readState());
+
+      const parts = [label];
+
+      if (fit) {
+
+        parts.push(`auto fit Vg+N+x, Area fixed=${formatSciText(fit.areaCm2, 3)} cm^2, PhiB=2.7 eV fixed`);
+
+      } else {
+
+        parts.push("auto fit skipped");
+
+      }
+
+      if (tddbFit) {
+
+        syncTimeSliderToTime(tddbFit.modelTbd);
+
+        parts.push(`TDDB E-model tBD=${formatSciText(tddbFit.modelTbd, 3)} s`);
+
+        parts.push(`gammaE=${tddbFit.alpha.toFixed(3)}`);
+
+        parts.push("view synced to tBD");
+
+      }
+
+      if (after) {
+
+        parts.push(`R2=${after.r2.toFixed(4)}`);
+
+        parts.push(`RMSE_ln=${after.rmseLn.toFixed(4)}`);
+
+      } else if (before) {
+
+        parts.push(`R2=${before.r2.toFixed(4)}`);
+
+        parts.push(`RMSE_ln=${before.rmseLn.toFixed(4)}`);
+
+      }
+
+      el("dataStatus").textContent = parts.join("; ");
+
+      update();
+
+    }
+
+
+
+    function occupiedNeighbours(cells, cols, rows, idx) {
+
+      const row = Math.floor(idx / cols);
+
+      const col = idx - row * cols;
+
+      let count = 0;
+
+      if (row > 0 && cells[idx - cols] > 0) count += 1;
+
+      if (row < rows - 1 && cells[idx + cols] > 0) count += 1;
+
+      if (col > 0 && cells[idx - 1] > 0) count += 1;
+
+      if (col < cols - 1 && cells[idx + 1] > 0) count += 1;
+
+      return count;
+
+    }
+
+
+
+    function findConductivePath(cells, cols, rows) {
+
+      const size = cols * rows;
+
+      const visited = new Uint8Array(size);
+
+      const prev = new Int32Array(size);
+
+      prev.fill(-1);
+
+      const queue = [];
+
+      for (let col = 0; col < cols; col += 1) {
+
+        const idx = col;
+
+        if (cells[idx] > 0) {
+
+          visited[idx] = 1;
+
+          prev[idx] = -2;
+
+          queue.push(idx);
+
+        }
+
+      }
+
+
+
+      let head = 0;
+
+      while (head < queue.length) {
+
+        const idx = queue[head];
+
+        head += 1;
+
+        const row = Math.floor(idx / cols);
+
+        const col = idx - row * cols;
+
+        if (row === rows - 1) {
+
+          const path = [];
+
+          let cur = idx;
+
+          while (cur >= 0) {
+
+            path.push(cur);
+
+            cur = prev[cur];
+
+          }
+
+          return {formed: true, path};
+
+        }
+
+        const next = [];
+
+        if (row > 0) next.push(idx - cols);
+
+        if (row < rows - 1) next.push(idx + cols);
+
+        if (col > 0) next.push(idx - 1);
+
+        if (col < cols - 1) next.push(idx + 1);
+
+        for (const n of next) {
+
+          if (!visited[n] && cells[n] > 0) {
+
+            visited[n] = 1;
+
+            prev[n] = idx;
+
+            queue.push(n);
+
+          }
+
+        }
+
+      }
+
+      return {formed: false, path: []};
+
+    }
+
+
+
+    function kmcLocalFieldMvCm(state, at, row, rows) {
+
+      const baseMvCm = clamp(at.eEffVm / 1e8, 0.01, 40);
+
+      const xNm = state.tox * row / Math.max(1, rows - 1);
+
+      let perturb = 0;
+
+      state.families.forEach((fam, idx) => {
+
+        if (!fam.enabled) return;
+
+        const fill = at.fills[idx] || 0;
+
+        const distanceNm = Math.abs(xNm - fam.x);
+
+        const sigmaNm = Math.max(0.15, state.tox * 0.015);
+
+        perturb += fam.n12 * fill * Math.exp(-(distanceNm * distanceNm) / (2 * sigmaNm * sigmaNm));
+
+      });
+
+      return clamp(baseMvCm * (1 + 0.025 * perturb), 0.01, 40);
+
+    }
+
+
+
+    function simulateKmc(state) {
+
+      const kmc = state.kmc;
+
+      const size = kmc.cols * kmc.rows;
+
+      const initial = new Uint8Array(size);
+
+      if (!kmc.enabled) {
+
+        return {enabled: false, cols: kmc.cols, rows: kmc.rows, initial, events: [], formed: false, breakdownTime: NaN, path: []};
+
+      }
+
+
+
+      const rng = makeRng(kmc.seed);
+
+      for (let idx = 0; idx < size; idx += 1) {
+
+        initial[idx] = rng() < kmc.p0 ? 1 : 0;
+
+      }
+
+
+
+      const cells = new Uint8Array(initial);
+
+      let path = findConductivePath(cells, kmc.cols, kmc.rows);
+
+      if (path.formed) {
+
+        return {enabled: true, cols: kmc.cols, rows: kmc.rows, initial, events: [], formed: true, breakdownTime: 0, path: path.path};
+
+      }
+
+
+
+      const events = [];
+
+      let time = 0;
+
+      while (time < state.endTime && events.length < kmc.maxEvents) {
+
+        const at = computeAtTime(state, Math.max(time, 1e-3));
+
+        const indices = [];
+
+        const rates = [];
+
+        let totalRate = 0;
+
+
+
+        for (let idx = 0; idx < size; idx += 1) {
+
+          if (cells[idx] > 0) continue;
+
+          const n = occupiedNeighbours(cells, kmc.cols, kmc.rows, idx);
+
+          const row = Math.floor(idx / kmc.cols);
+
+          const eLocalMvCm = kmcLocalFieldMvCm(state, at, row, kmc.rows);
+
+          const fieldFactor = Math.exp(clamp(kmc.alpha * eLocalMvCm, -20, 20));
+
+          const localFactor = Math.pow(1 + kmc.neighborBoost, n);
+
+          const rate = kmc.k0 * fieldFactor * localFactor;
+
+          if (rate > 0 && Number.isFinite(rate)) {
+
+            indices.push(idx);
+
+            rates.push(rate);
+
+            totalRate += rate;
+
+          }
+
+        }
+
+
+
+        if (!(totalRate > 0) || !Number.isFinite(totalRate)) break;
+
+        const dt = -Math.log(Math.max(1e-12, 1 - rng())) / totalRate;
+
+        if (!Number.isFinite(dt) || time + dt > state.endTime) break;
+
+        time += dt;
+
+
+
+        let pick = rng() * totalRate;
+
+        let chosen = indices[indices.length - 1];
+
+        for (let i = 0; i < indices.length; i += 1) {
+
+          pick -= rates[i];
+
+          if (pick <= 0) {
+
+            chosen = indices[i];
+
+            break;
+
+          }
+
+        }
+
+
+
+        cells[chosen] = 2;
+
+        events.push({idx: chosen, time});
+
+        path = findConductivePath(cells, kmc.cols, kmc.rows);
+
+        if (path.formed) {
+
+          return {enabled: true, cols: kmc.cols, rows: kmc.rows, initial, events, formed: true, breakdownTime: time, path: path.path};
+
+        }
+
+      }
+
+
+
+      return {enabled: true, cols: kmc.cols, rows: kmc.rows, initial, events, formed: false, breakdownTime: NaN, path: []};
+
+    }
+
+
+
+    function kmcCellsAtTime(result, time) {
+
+      const cells = new Uint8Array(result.initial);
+
+      for (const event of result.events) {
+
+        if (event.time <= time) cells[event.idx] = 2;
+
+        else break;
+
+      }
+
+      if (hasReachedBreakdown(result, time)) {
+
+        for (const idx of result.path) cells[idx] = 3;
+
+      }
+
+      return cells;
+
+    }
+
+    function hasReachedBreakdown(kmcResult, time) {
+
+      if (!kmcResult || !kmcResult.formed || !Number.isFinite(kmcResult.breakdownTime)) return false;
+
+      const tolerance = Math.max(1, kmcResult.breakdownTime * 0.002);
+
+      return time + tolerance >= kmcResult.breakdownTime;
+
+    }
+
+
+
+    function buildKmcCurrent(curves, state, kmcResult) {
+
+      if (!kmcResult.enabled || !kmcResult.formed) return null;
+
+      return curves.current.map((v, idx) => {
+
+        if (!hasReachedBreakdown(kmcResult, curves.t[idx])) return v;
+
+        return Math.max(v, curves.noDefect[idx]) * state.kmc.bdGain;
+
+      });
+
+    }
+
+    function drawWeibullChart(result) {
+
+      const canvas = el("weibullCanvas");
+
+      const {ctx, w, h} = setupCanvas(canvas);
+
+      ctx.clearRect(0, 0, w, h);
+
+      if (!result || !result.weibull) {
+
+        ctx.fillStyle = "#66707d";
+
+        ctx.font = "14px Segoe UI, Microsoft YaHei, sans-serif";
+
+        ctx.fillText("启用 tox Monte Carlo 后显示多器件 tBD Weibull 分布。", 18, 34);
+
+        el("weibullStatus").innerHTML = "tox Monte Carlo 未启用。";
+
+        return;
+
+      }
+
+      const wb = result.weibull;
+
+      drawLineChart("weibullCanvas", [
+
+        {x: wb.time, y: wb.y, color: "#7c3aed", width: 0, pointRadius: 3.2},
+
+        {x: wb.time, y: wb.fitY, color: "#111827", width: 2.4}
+
+      ], {
+
+        logY: false,
+
+        yLabel: "ln(-ln(1-F))",
+
+        forceXMin: Math.min(...wb.time) / 1.08,
+
+        forceXMax: Math.max(...wb.time) * 1.08
+
+      });
+
+      el("weibullStatus").innerHTML = `Weibull：N=${wb.time.length}，β=${wb.beta.toFixed(3)}，η=${formatSciHtml(wb.eta, 3)} s，R²=${Number.isFinite(wb.r2) ? wb.r2.toFixed(4) : "-"}；tBD 范围 ${formatSciHtml(Math.min(...wb.time), 3)}-${formatSciHtml(Math.max(...wb.time), 3)} s。`;
+
+    }
+
+
+
+    function setupCanvas(canvas) {
+
+      const dpr = window.devicePixelRatio || 1;
+
+      const rect = canvas.getBoundingClientRect();
+
+      const w = Math.max(320, Math.floor(rect.width * dpr));
+
+      const h = Math.max(240, Math.floor(rect.height * dpr));
+
+      if (canvas.width !== w || canvas.height !== h) {
+
+        canvas.width = w;
+
+        canvas.height = h;
+
+      }
+
+      const ctx = canvas.getContext("2d");
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      return {ctx, w: rect.width, h: rect.height};
+
+    }
+
+
+
+    function drawAxes(ctx, box, xLabel, yLabel) {
+
+      ctx.strokeStyle = "#cfd6cf";
+
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+
+      ctx.moveTo(box.left, box.top);
+
+      ctx.lineTo(box.left, box.bottom);
+
+      ctx.lineTo(box.right, box.bottom);
+
+      ctx.stroke();
+
+      ctx.fillStyle = "#66707d";
+
+      ctx.font = "12px Segoe UI, Microsoft YaHei, sans-serif";
+
+      ctx.fillText(xLabel, box.right - ctx.measureText(xLabel).width, box.bottom + 32);
+
+      if (yLabel) {
+
+        const tw = ctx.measureText(yLabel).width;
+
+        ctx.fillStyle = "rgba(255,255,255,0.94)";
+
+        ctx.fillRect(box.left, Math.max(2, box.top - 24), tw + 10, 18);
+
+        ctx.fillStyle = "#66707d";
+
+        ctx.fillText(yLabel, box.left + 5, Math.max(16, box.top - 10));
+
+      }
+
+    }
+
+
+
+    function drawBarrier(state, at) {
+
+      const canvas = el("barrierCanvas");
+
+      const {ctx, w, h} = setupCanvas(canvas);
+
+      ctx.clearRect(0, 0, w, h);
+
+      const box = {left: 58, right: w - 62, top: 24, bottom: h - 54};
+
+      const epsOx = state.epsRel * EPS0;
+
+      const visualChargeGain = 3;
+
+      const spreadNm = Math.max(0.08, Math.min(0.45, state.tox * 0.018));
+
+      const sheets = state.families.map((fam, idx) => ({
+
+        name: fam.name,
+
+        x: clamp(fam.x, 0, state.tox),
+
+        charge: fam.enabled ? fam.qcap * at.fills[idx] * visualChargeGain : 0,
+
+        fill: at.fills[idx],
+
+        et: fam.et,
+
+        color: fam.color
+
+      })).filter((s) => s.charge > 1e-20).sort((a, b) => a.x - b.x);
+
+
+
+      function erfApprox(x) {
+
+        const sign = x < 0 ? -1 : 1;
+
+        const z = Math.abs(x);
+
+        const t = 1 / (1 + 0.3275911 * z);
+
+        const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-z * z);
+
+        return sign * y;
+
+      }
+
+
+
+      function rawFieldAt(x) {
+
+        let cumCharge = 0;
+
+        for (const sheet of sheets) {
+
+          const transition = 0.5 * (1 + erfApprox((x - sheet.x) / Math.max(spreadNm, 1e-9)));
+
+          cumCharge += sheet.charge * transition;
+
+        }
+
+        return state.e0Vm + cumCharge / epsOx;
+
+      }
+
+
+
+      let rawArea = 0;
+
+      const normSteps = 260;
+
+      let prevNormX = 0;
+
+      let prevNormE = rawFieldAt(0);
+
+      for (let i = 1; i <= normSteps; i += 1) {
+
+        const x = state.tox * i / normSteps;
+
+        const e = rawFieldAt(x);
+
+        rawArea += 0.5 * (prevNormE + e) * (x - prevNormX);
+
+        prevNormX = x;
+
+        prevNormE = e;
+
+      }
+
+      const rawAverageField = rawArea / Math.max(state.tox, 1e-9);
+
+      const voltageBoundaryOffset = state.e0Vm - rawAverageField;
+
+
+
+      function fieldAt(x) {
+
+        return Math.max(rawFieldAt(x) + voltageBoundaryOffset, state.minFieldMvCm * 1e8);
+
+      }
+
+
+
+      function barrierAt(x) {
+
+        if (x <= 0) return state.phiB;
+
+        const steps = Math.max(24, Math.ceil(x / Math.max(0.015, state.tox / 260)));
+
+        let area = 0;
+
+        let prevX = 0;
+
+        let prevE = fieldAt(0);
+
+        for (let i = 1; i <= steps; i += 1) {
+
+          const curX = x * i / steps;
+
+          const curE = fieldAt(curX);
+
+          area += 0.5 * (prevE + curE) / 1e9 * (curX - prevX);
+
+          prevX = curX;
+
+          prevE = curE;
+
+        }
+
+        return state.phiB - area;
+
+      }
+
+
+
+      function findTurningPoint(limitNm) {
+
+        const steps = 260;
+
+        let prevX = 0;
+
+        let prevY = barrierAt(0);
+
+        for (let i = 1; i <= steps; i += 1) {
+
+          const x = limitNm * i / steps;
+
+          const y = barrierAt(x);
+
+          if (y <= 0) {
+
+            const f = prevY / Math.max(prevY - y, 1e-12);
+
+            return prevX + f * (x - prevX);
+
+          }
+
+          prevX = x;
+
+          prevY = y;
+
+        }
+
+        return limitNm;
+
+      }
+
+
+
+      const xtNm = findTurningPoint(state.tox);
+
+      const xMax = Math.min(state.tox, 5);
+
+      const uSamples = [];
+
+      const sampleCount = 180;
+
+      for (let i = 0; i <= sampleCount; i += 1) {
+
+        const x = xMax * i / sampleCount;
+
+        uSamples.push(barrierAt(x));
+
+      }
+
+      for (const fam of state.families) {
+
+        if (fam.enabled && fam.x <= xMax) {
+
+          uSamples.push(fam.et);
+
+        }
+
+      }
+
+      const uMinRaw = Math.max(-3, Math.min(...uSamples, 0));
+
+      const uMaxRaw = Math.max(...uSamples, state.phiB);
+
+      const uPad = Math.max(0.15, (uMaxRaw - uMinRaw) * 0.08);
+
+      const uMin = Math.max(-3, uMinRaw - uPad);
+
+      const uMax = uMaxRaw + uPad;
+
+      const fieldVals = [state.e0Vm / 1e8, at.eEffVm / 1e8];
+
+      for (let i = 0; i <= 80; i += 1) fieldVals.push(fieldAt(xMax * i / 80) / 1e8);
+
+      const eMin = Math.max(0, Math.min(...fieldVals) * 0.92);
+
+      const eMax = Math.max(...fieldVals) * 1.08;
+
+      const xPx = (x) => box.left + clamp(x / xMax, 0, 1) * (box.right - box.left);
+
+      const uPx = (u) => box.bottom - clamp((u - uMin) / (uMax - uMin), 0, 1) * (box.bottom - box.top);
+
+      const ePx = (e) => box.bottom - clamp((e - eMin) / Math.max(eMax - eMin, 1e-9), 0, 1) * (box.bottom - box.top);
+
+      function niceStep(span, targetTicks) {
+
+        const raw = Math.max(span / Math.max(1, targetTicks), 1e-9);
+
+        const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+
+        const norm = raw / pow;
+
+        const nice = norm <= 1 ? 1 : (norm <= 2 ? 2 : (norm <= 5 ? 5 : 10));
+
+        return nice * pow;
+
+      }
+
+
+
+      ctx.strokeStyle = "#edf0ed";
+
+      ctx.lineWidth = 1;
+
+      ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+
+      ctx.fillStyle = "#7b8490";
+
+      const xTickStep = xMax > 35 ? 10 : (xMax > 15 ? 5 : 1);
+
+      for (let gx = 0; gx <= Math.ceil(xMax); gx += xTickStep) {
+
+        const px = xPx(gx);
+
+        ctx.beginPath();
+
+        ctx.moveTo(px, box.top);
+
+        ctx.lineTo(px, box.bottom);
+
+        ctx.stroke();
+
+        ctx.fillText(String(gx), px - 3, box.bottom + 16);
+
+      }
+
+
+
+      const uStep = niceStep(uMax - uMin, 6);
+
+      const tickStart = Math.ceil(uMin / uStep) * uStep;
+
+      const tickEnd = Math.floor(uMax / uStep) * uStep;
+
+      for (let gy = tickStart; gy <= tickEnd + uStep * 0.1; gy += uStep) {
+
+        const py = uPx(gy);
+
+        ctx.beginPath();
+
+        ctx.moveTo(box.left, py);
+
+        ctx.lineTo(box.right, py);
+
+        ctx.stroke();
+
+        const label = Math.abs(gy) >= 10 ? gy.toFixed(0) : gy.toFixed(1);
+
+        ctx.fillText(label, 20, py + 4);
+
+      }
+
+
+
+      if (uMin < 0 && uMax > 0) {
+
+        const zeroY = uPx(0);
+
+        ctx.save();
+
+        ctx.strokeStyle = "#d98c1e";
+
+        ctx.lineWidth = 1.2;
+
+        ctx.setLineDash([4, 5]);
+
+        ctx.beginPath();
+
+        ctx.moveTo(box.left, zeroY);
+
+        ctx.lineTo(box.right, zeroY);
+
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#b15a00";
+
+        ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+
+        ctx.fillText("E=0", box.right - 34, zeroY - 5);
+
+        ctx.restore();
+
+      }
+
+
+
+      const sicEcY = uPx(0);
+
+      ctx.save();
+
+      ctx.strokeStyle = "rgba(72,80,90,0.45)";
+
+      ctx.lineWidth = 1;
+
+      ctx.setLineDash([2, 4]);
+
+      ctx.beginPath();
+
+      ctx.moveTo(box.left, sicEcY);
+
+      ctx.lineTo(box.right, sicEcY);
+
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "#48505a";
+
+      ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+
+      ctx.fillText("Ec(SiC)=0", box.left + 6, sicEcY - 6);
+
+      ctx.restore();
+
+
+
+      const eStep = niceStep(eMax - eMin, 4);
+
+      const eStart = Math.ceil(eMin / eStep) * eStep;
+
+      const eEnd = Math.floor(eMax / eStep) * eStep;
+
+      for (let e = eStart; e <= eEnd + eStep * 0.1; e += eStep) {
+
+        const py = ePx(e);
+
+        ctx.fillStyle = "#0a7f68";
+
+        ctx.fillText(e.toFixed(1), box.right + 8, py + 4);
+
+      }
+
+
+
+      ctx.strokeStyle = "#cfd6cf";
+
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+
+      ctx.moveTo(box.left, box.top);
+
+      ctx.lineTo(box.left, box.bottom);
+
+      ctx.lineTo(box.right, box.bottom);
+
+      ctx.lineTo(box.right, box.top);
+
+      ctx.stroke();
+
+      ctx.fillStyle = "#66707d";
+
+      ctx.font = "12px Segoe UI, Microsoft YaHei, sans-serif";
+
+      ctx.fillText("oxide depth x (nm)", box.right - 118, box.bottom + 32);
+
+      ctx.save();
+
+      ctx.translate(box.left - 42, box.top + 96);
+
+      ctx.rotate(-Math.PI / 2);
+
+      ctx.fillText("SiO2 conduction band Uc (eV)", 0, 0);
+
+      ctx.restore();
+
+      ctx.save();
+
+      ctx.translate(box.right + 45, box.top + 116);
+
+      ctx.rotate(-Math.PI / 2);
+
+      ctx.fillStyle = "#0a7f68";
+
+      ctx.fillText("Eox (MV/cm)", 0, 0);
+
+      ctx.restore();
+
+
+
+      const uPoints = [];
+
+      const n = 180;
+
+      for (let i = 0; i <= n; i += 1) {
+
+        const x = xMax * i / n;
+
+        uPoints.push([xPx(x), uPx(barrierAt(x))]);
+
+      }
+
+      for (const sheet of sheets) {
+
+        if (sheet.x <= xMax) uPoints.push([xPx(sheet.x), uPx(barrierAt(sheet.x))]);
+
+      }
+
+      uPoints.sort((a, b) => a[0] - b[0]);
+
+      ctx.strokeStyle = "#1967d2";
+
+      ctx.lineWidth = 3;
+
+      ctx.setLineDash([]);
+
+      ctx.beginPath();
+
+      uPoints.forEach(([px, py], idx) => idx ? ctx.lineTo(px, py) : ctx.moveTo(px, py));
+
+      ctx.stroke();
+
+
+
+      ctx.strokeStyle = "#0a7f68";
+
+      ctx.lineWidth = 2.6;
+
+      ctx.beginPath();
+
+      for (let i = 0; i <= n; i += 1) {
+
+        const x = xMax * i / n;
+
+        const px = xPx(x);
+
+        const py = ePx(fieldAt(x) / 1e8);
+
+        if (i === 0) ctx.moveTo(px, py);
+
+        else ctx.lineTo(px, py);
+
+      }
+
+      ctx.stroke();
+
+
+
+      if (xtNm <= xMax) {
+
+        const xtPx = xPx(xtNm);
+
+        ctx.save();
+
+        ctx.strokeStyle = "#b15a00";
+
+        ctx.lineWidth = 1.8;
+
+        ctx.setLineDash([5, 4]);
+
+        ctx.beginPath();
+
+        ctx.moveTo(xtPx, box.top);
+
+        ctx.lineTo(xtPx, box.bottom);
+
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#b15a00";
+
+        ctx.font = "12px Segoe UI, Microsoft YaHei, sans-serif";
+
+        ctx.fillText(`xt=${xtNm.toFixed(2)} nm`, Math.min(xtPx + 6, box.right - 78), box.top + 18);
+
+        ctx.restore();
+
+      }
+
+
+
+      const activeNMax = Math.max(...state.families.filter((f) => f.enabled).map((f) => f.n12), 1e-12);
+
+      state.families.forEach((fam, idx) => {
+
+        if (!fam.enabled || fam.x > xMax) return;
+
+        const fill = at.fills[idx];
+
+        const px = xPx(fam.x);
+
+        const py = uPx(fam.et);
+
+        const sizeFactor = Math.sqrt(Math.max(fam.n12, 0) / activeNMax);
+
+        const radius = 4 + 9 * sizeFactor;
+
+        ctx.save();
+
+        ctx.globalAlpha = 0.18 + 0.82 * fill;
+
+        ctx.fillStyle = fam.color;
+
+        ctx.strokeStyle = "#ffffff";
+
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+
+        ctx.arc(px, py, radius, 0, Math.PI * 2);
+
+        ctx.fill();
+
+        ctx.stroke();
+
+        ctx.globalAlpha = 1;
+
+        ctx.fillStyle = fam.color;
+
+        ctx.font = "12px Segoe UI, Microsoft YaHei, sans-serif";
+
+        const labelOffsets = [[8, -10], [8, 16], [-34, -10], [-34, 16]];
+
+        const [dx, dy] = labelOffsets[idx % labelOffsets.length];
+
+        ctx.fillText(`${fam.name}`, clamp(px + dx, box.left + 3, box.right - 24), clamp(py + dy, box.top + 12, box.bottom - 4));
+
+        ctx.restore();
+
+      });
+
+
+
+      const xtNoTrapNm = state.phiB / Math.max(state.e0Vm / 1e9, 1e-12);
+
+      const oneNm = Math.min(1, xMax);
+
+      const bendAtOneNm = barrierAt(oneNm) - state.phiB;
+
+      const barrierStatus = el("barrierStatus");
+
+      if (barrierStatus) {
+
+        barrierStatus.innerHTML = `显示范围 0-${xMax.toFixed(1)} nm；无缺陷隧穿宽度 ${xtNoTrapNm.toFixed(2)} nm，当前 ${xtNm.toFixed(2)} nm；Eox ${((fieldAt(0) / 1e8)).toFixed(2)}-${((fieldAt(xMax) / 1e8)).toFixed(2)} MV/cm；1 nm 处能带弯曲约 ${bendAtOneNm.toFixed(2)} eV。`;
+
+      }
+
+    }
+
+
+
+    function drawKmc(state, kmcResult, time) {
+
+      const canvas = el("kmcCanvas");
+
+      const {ctx, w, h} = setupCanvas(canvas);
+
+      ctx.clearRect(0, 0, w, h);
+
+      const kmc = state.kmc;
+
+      const box = {left: 74, right: w - 30, top: 42, bottom: h - 62};
+
+      const cellSize = Math.max(1, Math.min((box.right - box.left) / kmc.cols, (box.bottom - box.top) / kmc.rows));
+
+      const gridW = cellSize * kmc.cols;
+
+      const gridH = cellSize * kmc.rows;
+
+      const left = box.left + Math.max(0, (box.right - box.left - gridW) / 2);
+
+      const top = box.top + Math.max(0, (box.bottom - box.top - gridH) / 2);
+
+      const colorsByCell = ["#eef2f3", "#0a7f68", "#d98c1e", "#be3c45"];
+
+      const cells = kmcCellsAtTime(kmcResult, time);
+
+
+
+      ctx.fillStyle = "#303842";
+
+      ctx.font = "13px Segoe UI, Microsoft YaHei, sans-serif";
+
+      ctx.fillText("Gate", left, top - 18);
+
+      ctx.fillText("Substrate", left, top + gridH + 24);
+
+      ctx.textAlign = "right";
+
+      ctx.fillText(`L=${kmc.deviceLengthNm.toFixed(0)} nm, tox=${kmc.oxideThicknessNm.toFixed(0)} nm`, left + gridW, top - 18);
+
+      ctx.fillText(`cell=${kmc.cellNm.toFixed(0)} nm x ${kmc.cellNm.toFixed(0)} nm`, left + gridW, top - 3);
+
+      ctx.textAlign = "left";
+
+      ctx.strokeStyle = "#cfd6cf";
+
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+
+      ctx.moveTo(left, top - 4);
+
+      ctx.lineTo(left + gridW, top - 4);
+
+      ctx.moveTo(left, top + gridH + 4);
+
+      ctx.lineTo(left + gridW, top + gridH + 4);
+
+      ctx.stroke();
+
+
+
+      if (!kmcResult.enabled) {
+
+        ctx.fillStyle = "#66707d";
+
+        ctx.font = "14px Segoe UI, Microsoft YaHei, sans-serif";
+
+        ctx.fillText("KMC 未启用；上方仍显示基础 FN-defect I(t)。", left + 10, top + 32);
+
+        return;
+
+      }
+
+
+
+      const gap = cellSize >= 3 ? Math.min(1.2, cellSize * 0.14) : 0;
+
+      for (let row = 0; row < kmc.rows; row += 1) {
+
+        for (let col = 0; col < kmc.cols; col += 1) {
+
+          const idx = row * kmc.cols + col;
+
+          const value = cells[idx];
+
+          const x = left + col * cellSize;
+
+          const y = top + row * cellSize;
+
+          ctx.fillStyle = colorsByCell[value] || colorsByCell[0];
+
+          ctx.fillRect(x + gap, y + gap, Math.max(1, cellSize - 2 * gap), Math.max(1, cellSize - 2 * gap));
+
+        }
+
+      }
+
+
+
+      ctx.strokeStyle = hasReachedBreakdown(kmcResult, time) ? "#be3c45" : "#d9ded7";
+
+      ctx.lineWidth = 2;
+
+      ctx.strokeRect(left, top, gridW, gridH);
+
+      ctx.fillStyle = "#66707d";
+
+      ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+
+      ctx.textAlign = "center";
+
+      ctx.fillText("x (nm)", left + gridW / 2, top + gridH + 42);
+
+      ctx.textAlign = "right";
+
+      ctx.fillText("0", left - 6, top + 4);
+
+      ctx.fillText(`${kmc.oxideThicknessNm.toFixed(0)}`, left - 6, top + gridH + 4);
+
+      ctx.save();
+
+      ctx.translate(left - 46, top + gridH / 2);
+
+      ctx.rotate(-Math.PI / 2);
+
+      ctx.textAlign = "center";
+
+      ctx.fillText("depth (nm)", 0, 0);
+
+      ctx.restore();
+
+      ctx.textAlign = "left";
+
+
+
+    }
+
+
+
+    function drawLineChart(canvasId, series, options) {
+
+      const canvas = el(canvasId);
+
+      const {ctx, w, h} = setupCanvas(canvas);
+
+      ctx.clearRect(0, 0, w, h);
+
+      const box = {left: 82, right: w - 24, top: 42, bottom: h - 58};
+
+      const xVals = series.flatMap((s) => s.x).filter((x) => Number.isFinite(x) && x > 0);
+      let xMin = (options && options.forceXMin !== undefined) ? Math.log10(options.forceXMin) : Math.log10(Math.min(...xVals));
+      let xMax = (options && options.forceXMax !== undefined) ? Math.log10(options.forceXMax) : Math.log10(Math.max(...xVals));
+
+      if (!Number.isFinite(xMin) || !Number.isFinite(xMax) || xMin === xMax) {
+
+        const mid = Number.isFinite(xMin) ? xMin : 0;
+
+        xMin = mid - 0.5;
+
+        xMax = mid + 0.5;
+
+      }
+
+      let yMin = Infinity;
+
+      let yMax = -Infinity;
+
+      for (const s of series) {
+
+        if (s.includeInScale === false) continue;
+
+        let yVals = s.scalingY || s.y;
+
+        if (!s.scalingY && s.yLow && s.yHigh) {
+
+          yVals = yVals.concat(s.yLow, s.yHigh);
+
+        }
+
+        for (const y of yVals) {
+
+          if (!Number.isFinite(y) || y <= 0 && options.logY) continue;
+
+          const yy = options.logY ? Math.log10(y) : y;
+
+          yMin = Math.min(yMin, yy);
+
+          yMax = Math.max(yMax, yy);
+
+        }
+
+      }
+
+      if (!Number.isFinite(yMin) || !Number.isFinite(yMax) || yMin === yMax) {
+
+        yMin = -1;
+
+        yMax = 1;
+
+      }
+
+      if (options.logY && Number.isFinite(options.yMinLog) && Number.isFinite(options.yMaxLog)) {
+
+        yMin = options.yMinLog;
+
+        yMax = options.yMaxLog;
+
+      } else if (options.logY) {
+
+        if (yMax - yMin < 1.5) {
+
+          const mid = (yMin + yMax) / 2;
+
+          yMin = mid - 0.75;
+
+          yMax = mid + 0.75;
+
+        }
+
+      }
+
+      const pad = (yMax - yMin) * 0.08;
+
+      yMin -= pad;
+
+      yMax += pad;
+
+      const linearYScale = options.logY ? {scale: 1, exp: 0} : scaledAxis([yMin, yMax]);
+
+      const xPx = (x) => box.left + (Math.log10(x) - xMin) / (xMax - xMin) * (box.right - box.left);
+
+      const yPx = (y) => {
+
+        const yy = options.logY ? Math.log10(Math.max(y, 1e-300)) : y;
+
+        return clamp(box.bottom - (yy - yMin) / (yMax - yMin) * (box.bottom - box.top), box.top, box.bottom);
+
+      };
+
+
+
+      drawAxes(ctx, box, "time (s)", options.yLabel);
+
+      if (!options.logY) drawCornerScale(ctx, axisPowerLabel(linearYScale.exp), box.right, Math.max(16, box.top - 10));
+
+      ctx.strokeStyle = "#edf0ed";
+
+      ctx.lineWidth = 1;
+
+      ctx.fillStyle = "#7b8490";
+
+      ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+
+      for (let lx = Math.ceil(xMin); lx <= Math.floor(xMax); lx += 1) {
+
+        const px = box.left + (lx - xMin) / (xMax - xMin) * (box.right - box.left);
+
+        ctx.beginPath();
+
+        ctx.moveTo(px, box.top);
+
+        ctx.lineTo(px, box.bottom);
+
+        ctx.stroke();
+
+        drawHtmlText(ctx, `10<sup>${lx}</sup>`, px, box.bottom + 16, "center");
+
+      }
+
+      const yTicks = [];
+
+      if (options.logY) {
+
+        const start = Math.ceil(yMin);
+
+        const end = Math.floor(yMax);
+
+        const rawStep = Math.max(1, Math.ceil((end - start + 1) / 6));
+
+        for (let ly = start; ly <= end; ly += rawStep) yTicks.push(ly);
+
+        if (!yTicks.length) yTicks.push(Math.round((yMin + yMax) / 2));
+
+      } else {
+
+        const tickCount = 5;
+
+        for (let i = 0; i <= tickCount; i += 1) yTicks.push(yMin + i / tickCount * (yMax - yMin));
+
+      }
+
+      for (const ly of yTicks) {
+
+        const py = box.bottom - (ly - yMin) / (yMax - yMin) * (box.bottom - box.top);
+
+        ctx.beginPath();
+
+        ctx.moveTo(box.left, py);
+
+        ctx.lineTo(box.right, py);
+
+        ctx.stroke();
+
+        if (options.logY) {
+
+          drawHtmlText(ctx, `10<sup>${ly}</sup>`, box.left - 8, py + 4, "right");
+
+        } else {
+
+          const label = formatAxisNumber(ly / linearYScale.scale, 2);
+
+          const labelWidth = ctx.measureText(label).width;
+
+          ctx.fillText(label, Math.max(4, box.left - labelWidth - 8), py + 4);
+
+        }
+
+      }
+
+      for (const s of series) {
+
+        if (!s.yLow || !s.yHigh) continue;
+
+        ctx.save();
+
+        ctx.fillStyle = s.fill || "rgba(124,58,237,0.12)";
+
+        ctx.beginPath();
+
+        s.x.forEach((x, idx) => {
+
+          const px = xPx(x);
+
+          const py = yPx(s.yHigh[idx]);
+
+          if (idx === 0) ctx.moveTo(px, py);
+
+          else ctx.lineTo(px, py);
+
+        });
+
+        for (let idx = s.x.length - 1; idx >= 0; idx -= 1) {
+
+          ctx.lineTo(xPx(s.x[idx]), yPx(s.yLow[idx]));
+
+        }
+
+        ctx.closePath();
+
+        ctx.fill();
+
+        ctx.restore();
+
+      }
+
+
+
+      for (const s of series) {
+
+        ctx.save();
+
+        ctx.strokeStyle = s.color;
+
+        ctx.lineWidth = s.width === 0 ? 0 : (s.width || 2.5);
+
+        ctx.setLineDash(s.dash || []);
+
+        if (ctx.lineWidth > 0) ctx.beginPath();
+
+        s.x.forEach((x, idx) => {
+
+          const px = xPx(x);
+
+          const py = yPx(s.y[idx]);
+
+          if (ctx.lineWidth > 0 && idx === 0) ctx.moveTo(px, py);
+
+          else if (ctx.lineWidth > 0) ctx.lineTo(px, py);
+
+        });
+
+        if (ctx.lineWidth > 0) ctx.stroke();
+
+        if (s.pointRadius) {
+
+          ctx.fillStyle = s.color;
+
+          s.x.forEach((x, idx) => {
+
+            ctx.beginPath();
+
+            ctx.arc(xPx(x), yPx(s.y[idx]), s.pointRadius, 0, Math.PI * 2);
+
+            ctx.fill();
+
+          });
+
+        }
+
+        ctx.restore();
+
+      }
+
+
+
+      if (options.cursorTime) {
+
+        const px = clamp(xPx(options.cursorTime), box.left, box.right);
+
+        ctx.strokeStyle = "#b15a00";
+
+        ctx.lineWidth = 2;
+
+        ctx.setLineDash([6, 4]);
+
+        ctx.beginPath();
+
+        ctx.moveTo(px, box.top);
+
+        ctx.lineTo(px, box.bottom);
+
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+      }
+
+
+
+      if (Number.isFinite(options.breakdownTime) && options.breakdownTime >= Math.min(...xVals) && options.breakdownTime <= Math.max(...xVals)) {
+
+        const px = clamp(xPx(options.breakdownTime), box.left, box.right);
+
+        ctx.strokeStyle = "#be3c45";
+
+        ctx.lineWidth = 2;
+
+        ctx.setLineDash([3, 4]);
+
+        ctx.beginPath();
+
+        ctx.moveTo(px, box.top);
+
+        ctx.lineTo(px, box.bottom);
+
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = "#be3c45";
+
+        ctx.font = "12px Segoe UI, Microsoft YaHei, sans-serif";
+
+        const label = options.breakdownLabel || "tBD";
+
+        const tw = ctx.measureText(label).width;
+
+        const lx = px + tw + 14 > box.right ? px - tw - 10 : px + 8;
+
+        const ly = box.top + 18;
+
+        ctx.fillStyle = "rgba(255,255,255,0.92)";
+
+        ctx.fillRect(lx - 4, ly - 13, tw + 8, 17);
+
+        ctx.strokeStyle = "rgba(190,60,69,0.35)";
+
+        ctx.lineWidth = 1;
+
+        ctx.strokeRect(lx - 4, ly - 13, tw + 8, 17);
+
+        ctx.fillStyle = "#be3c45";
+
+        ctx.fillText(label, lx, ly);
+
+      }
+
+    }
+
+
+
+    function drawDualAxisChart(canvasId, leftSeries, rightSeries, options) {
+
+      const canvas = el(canvasId);
+
+      const {ctx, w, h} = setupCanvas(canvas);
+
+      ctx.clearRect(0, 0, w, h);
+
+      const box = {left: 82, right: w - 72, top: 42, bottom: h - 58};
+
+      const xVals = leftSeries.x;
+
+      const xMin = Math.log10(Math.min(...xVals));
+
+      const xMax = Math.log10(Math.max(...xVals));
+
+
+
+      function range(vals) {
+
+        let min = Infinity;
+
+        let max = -Infinity;
+
+        vals.forEach((v) => {
+
+          if (!Number.isFinite(v)) return;
+
+          min = Math.min(min, v);
+
+          max = Math.max(max, v);
+
+        });
+
+        if (!Number.isFinite(min) || !Number.isFinite(max)) return [-1, 1];
+
+        if (min === max) {
+
+          const base = Math.max(Math.abs(min), 1);
+
+          return [min - base * 0.08, max + base * 0.08];
+
+        }
+
+        const pad = (max - min) * 0.1;
+
+        return [min - pad, max + pad];
+
+      }
+
+
+
+      const [leftMin, leftMax] = range(leftSeries.y);
+
+      const [rightMin, rightMax] = range(rightSeries.y);
+
+      const leftAxisScale = scaledAxis([leftMin, leftMax]);
+
+      const rightAxisScale = scaledAxis([rightMin, rightMax]);
+
+      const xPx = (x) => box.left + (Math.log10(x) - xMin) / (xMax - xMin) * (box.right - box.left);
+
+      const yLeftPx = (y) => clamp(box.bottom - (y - leftMin) / (leftMax - leftMin) * (box.bottom - box.top), box.top, box.bottom);
+
+      const yRightPx = (y) => clamp(box.bottom - (y - rightMin) / (rightMax - rightMin) * (box.bottom - box.top), box.top, box.bottom);
+
+
+
+      ctx.strokeStyle = "#cfd6cf";
+
+      ctx.lineWidth = 1;
+
+      ctx.beginPath();
+
+      ctx.moveTo(box.left, box.top);
+
+      ctx.lineTo(box.left, box.bottom);
+
+      ctx.lineTo(box.right, box.bottom);
+
+      ctx.lineTo(box.right, box.top);
+
+      ctx.stroke();
+
+
+
+      ctx.fillStyle = "#66707d";
+
+      ctx.font = "12px Segoe UI, Microsoft YaHei, sans-serif";
+
+      ctx.fillText("time (s)", box.right - ctx.measureText("time (s)").width, box.bottom + 32);
+
+      ctx.fillStyle = "rgba(255,255,255,0.94)";
+
+      ctx.fillRect(box.left, Math.max(2, box.top - 24), 160, 18);
+
+      ctx.fillRect(box.right - 158, Math.max(2, box.top - 24), 158, 18);
+
+      ctx.fillStyle = leftSeries.color;
+
+      drawHtmlText(ctx, `${options.leftLabel} ${axisPowerLabel(leftAxisScale.exp)}`.trim(), box.left + 5, Math.max(16, box.top - 10), "left");
+
+      ctx.fillStyle = rightSeries.color;
+
+      drawHtmlText(ctx, `${options.rightLabel} ${axisPowerLabel(rightAxisScale.exp)}`.trim(), box.right, Math.max(16, box.top - 10), "right");
+
+
+
+      ctx.strokeStyle = "#edf0ed";
+
+      ctx.lineWidth = 1;
+
+      ctx.font = "11px Segoe UI, Microsoft YaHei, sans-serif";
+
+      for (let lx = Math.ceil(xMin); lx <= Math.floor(xMax); lx += 1) {
+
+        const px = box.left + (lx - xMin) / (xMax - xMin) * (box.right - box.left);
+
+        ctx.beginPath();
+
+        ctx.moveTo(px, box.top);
+
+        ctx.lineTo(px, box.bottom);
+
+        ctx.stroke();
+
+        ctx.fillStyle = "#7b8490";
+
+        drawHtmlText(ctx, `10<sup>${lx}</sup>`, px, box.bottom + 16, "center");
+
+      }
+
+
+
+      const tickCount = 5;
+
+      for (let i = 0; i <= tickCount; i += 1) {
+
+        const f = i / tickCount;
+
+        const py = box.bottom - f * (box.bottom - box.top);
+
+        ctx.beginPath();
+
+        ctx.moveTo(box.left, py);
+
+        ctx.lineTo(box.right, py);
+
+        ctx.stroke();
+
+        const leftVal = leftMin + f * (leftMax - leftMin);
+
+        const rightVal = rightMin + f * (rightMax - rightMin);
+
+        const leftLabel = formatAxisNumber(leftVal / leftAxisScale.scale, 2);
+
+        const rightLabel = formatAxisNumber(rightVal / rightAxisScale.scale, 2);
+
+        ctx.fillStyle = leftSeries.color;
+
+        ctx.fillText(leftLabel, Math.max(4, box.left - ctx.measureText(leftLabel).width - 8), py + 4);
+
+        ctx.fillStyle = rightSeries.color;
+
+        ctx.fillText(rightLabel, box.right + 8, py + 4);
+
+      }
+
+
+
+      function strokeSeries(s, yMap) {
+
+        ctx.save();
+
+        ctx.strokeStyle = s.color;
+
+        ctx.lineWidth = s.width || 2.5;
+
+        ctx.beginPath();
+
+        s.x.forEach((x, idx) => {
+
+          const px = xPx(x);
+
+          const py = yMap(s.y[idx]);
+
+          if (idx === 0) ctx.moveTo(px, py);
+
+          else ctx.lineTo(px, py);
+
+        });
+
+        ctx.stroke();
+
+        ctx.restore();
+
+      }
+
+
+
+      strokeSeries(leftSeries, yLeftPx);
+
+      strokeSeries(rightSeries, yRightPx);
+
+
+
+      if (options.cursorTime) {
+
+        const px = clamp(xPx(options.cursorTime), box.left, box.right);
+
+        ctx.strokeStyle = "#b15a00";
+
+        ctx.lineWidth = 2;
+
+        ctx.setLineDash([6, 4]);
+
+        ctx.beginPath();
+
+        ctx.moveTo(px, box.top);
+
+        ctx.lineTo(px, box.bottom);
+
+        ctx.stroke();
+
+        ctx.setLineDash([]);
+
+      }
+
+    }
+
+
+
+    function update() {
+
+      const state = readState();
+
+      let tMin = 1e-3;
+
+      let tMax = state.endTime;
+
+      if (importedData && importedData.t && importedData.t.length > 0) {
+
+        tMin = importedData.t[0];
+
+        tMax = importedData.t[importedData.t.length - 1];
+
+      }
+
+      const minLog = Math.log10(tMin);
+
+      const maxLog = Math.log10(Math.max(tMax, tMin * 10));
+
+      const slider = el("timeSlider");
+
+      slider.min = String(minLog);
+
+      slider.max = String(maxLog);
+
+      const t = clamp(state.time, tMin, tMax);
+
+      slider.value = String(Math.log10(t));
+
+      const at = computeAtTime(state, t);
+
+      const curves = sampleCurves(state);
+
+      const kmcResult = simulateKmc(state);
+
+      const kmcCurrent = buildKmcCurrent(curves, state, kmcResult);
+
+      const kmcGeneratedNow = kmcResult.events ? kmcResult.events.filter((event) => event.time <= t).length : 0;
+
+      const toxMc = simulateToxMonteCarlo(state, curves.t, kmcResult);
+
+
+
+      el("timeLabel").innerHTML = `${formatSciHtml(t, 2)} s`;
+
+      el("fieldPill").innerHTML = `E<sub>0</sub> ${state.fieldMvCm.toFixed(3)} MV/cm`;
+
+      el("mCurrent").innerHTML = formatCompactHtml(at.current, "A", 3);
+
+      el("mLogI").innerHTML = at.log10Current.toFixed(3);
+
+      el("mRatio").innerHTML = formatSciHtml(at.ratio, 3);
+
+      el("mEeff").innerHTML = `${(at.eEffVm / 1e8).toFixed(3)} MV/cm`;
+
+      el("mQdef").innerHTML = formatCompactHtml(at.qdef, "C/m²", 3);
+
+      if (importedData) {
+        const fitError = calculateFitError(state);
+        if (fitError) {
+          el("mFitError").style.display = "inline-flex";
+          el("mFitRmse").style.display = "inline-flex";
+          el("mR2").innerHTML = fitError.r2.toFixed(4);
+          el("mRmse").innerHTML = fitError.rmseLn.toFixed(4);
+        } else {
+          el("mFitError").style.display = "none";
+          el("mFitRmse").style.display = "none";
+        }
+      } else {
+        el("mFitError").style.display = "none";
+        el("mFitRmse").style.display = "none";
+      }
+
+      updateTauReadouts(state);
+
+      if (!kmcResult.enabled) {
+
+        el("mKmcTbd").innerHTML = "off";
+
+        el("mKmcPath").innerHTML = "-";
+
+        el("kmcStatus").innerHTML = "KMC 未启用；当前只显示 <i>I</i>(<i>t</i>) 基础电流。";
+
+      } else if (kmcResult.formed) {
+
+        el("mKmcTbd").innerHTML = `${formatSciHtml(kmcResult.breakdownTime, 3)} s`;
+
+        el("mKmcPath").innerHTML = hasReachedBreakdown(kmcResult, t) ? "已贯通" : "将贯通";
+
+        el("kmcStatus").innerHTML = `当前已生成 ${kmcGeneratedNow}/${kmcResult.events.length} 个 KMC 缺陷；KMC 在 ${formatSciHtml(kmcResult.breakdownTime, 3)} s 形成 <i>t</i><sub>BD</sub> 导电通道；二维截面 ${state.kmc.deviceLengthNm.toFixed(0)} nm × ${state.kmc.oxideThicknessNm.toFixed(0)} nm，每个单元 ${state.kmc.cellNm.toFixed(0)} nm × ${state.kmc.cellNm.toFixed(0)} nm。事件率采用 TDDB E-model <i>r</i>=<i>k</i><sub>0</sub>exp(<i>&gamma;</i><sub>E</sub><i>E</i><sub>local</sub>)。`;
+
+      } else {
+
+        el("mKmcTbd").innerHTML = "未贯通";
+
+        el("mKmcPath").innerHTML = `${kmcResult.events.length} events`;
+
+        el("kmcStatus").innerHTML = `当前已生成 ${kmcGeneratedNow}/${kmcResult.events.length} 个 KMC 缺陷；二维截面 ${state.kmc.deviceLengthNm.toFixed(0)} nm × ${state.kmc.oxideThicknessNm.toFixed(0)} nm，每个单元 ${state.kmc.cellNm.toFixed(0)} nm × ${state.kmc.cellNm.toFixed(0)} nm；到 ${formatSciHtml(state.endTime, 2)} s 仍未形成贯通通道。`;
+
+      }
+
+
+
+      const currentSeries = [
+
+        {x: curves.t, y: curves.noDefect, color: "#9aa3ad", width: 2.5, dash: [8, 6]},
+
+        {x: curves.t, y: curves.current, color: "#1967d2", width: 3}
+
+      ];
+
+      if (importedData) {
+        const bdIdx = detectBreakdown(importedData.t, importedData.current, 1000.0, 1e-6);
+        currentSeries.push({
+          x: importedData.t,
+          y: importedData.current,
+          scalingY: importedData.current.slice(0, bdIdx),
+          color: "#111827",
+          width: 2,
+          dash: [2, 3]
+        });
+      }
+
+      if (kmcCurrent) {
+
+        currentSeries.push({x: curves.t, y: kmcCurrent, color: "#be3c45", width: 2.8, dash: [6, 4], includeInScale: false});
+
+      }
+
+      if (toxMc) {
+
+        toxMc.deviceCurves.forEach((deviceCurve) => {
+
+          currentSeries.push({x: toxMc.t, y: deviceCurve, color: "rgba(124,58,237,0.28)", width: 1.1, includeInScale: false});
+
+        });
+
+        currentSeries.push({x: toxMc.t, y: toxMc.p50, yLow: toxMc.p5, yHigh: toxMc.p95, color: "#7c3aed", width: 2.4, dash: [5, 4], fill: "rgba(124,58,237,0.14)"});
+
+      }
+
+      const chartOptions = {
+        logY: true,
+        yLabel: "I (A, log)",
+        yMinLog: NaN,
+        yMaxLog: NaN,
+        cursorTime: t,
+        breakdownTime: kmcResult.formed ? kmcResult.breakdownTime : NaN,
+        breakdownLabel: "KMC tBD"
+      };
+
+      if (importedData && importedData.t && importedData.t.length > 0) {
+        chartOptions.forceXMin = Math.min(...importedData.t) / 10;
+        chartOptions.forceXMax = Math.max(...importedData.t) * 10;
+      }
+
+      drawLineChart("currentCanvas", currentSeries, chartOptions);
+
+      if (toxMc) {
+
+        el("currentStatus").innerHTML = `tox MC：${toxMc.devices} 个器件 × ${toxMc.patches} 个局域区域；显示 ${toxMc.deviceCurves.length} 条单器件 I-t；σ_device=${toxMc.sigmaDeviceNm.toFixed(3)} nm，σ_local=${toxMc.sigmaLocalNm.toFixed(3)} nm；器件平均 tox 范围 ${toxMc.minTox.toFixed(3)}-${toxMc.maxTox.toFixed(3)} nm。紫色虚线为 P50，阴影为 P5-P95。`;
+
+      } else {
+
+        el("currentStatus").innerHTML = "tox Monte Carlo 未启用；主图显示标称厚度器件。";
+
+      }
+
+      drawBarrier(state, at);
+
+      drawDualAxisChart(
+
+        "fieldCanvas",
+
+        {x: curves.t, y: curves.qdef, color: "#0a7f68", width: 2.8},
+
+        {x: curves.t, y: curves.eEff, color: "#6a4acb", width: 2.8},
+
+        {leftLabel: "Qdef (C/m²)", rightLabel: "Einj (MV/cm)", cursorTime: t}
+
+      );
+
+      drawKmc(state, kmcResult, t);
+
+      drawWeibullChart(toxMc);
+
+      saveParamsToLocalStorage();
+
+    }
+
+
+
+    function updateTauReadouts(state) {
+
+      const activeTau = [];
+
+      state.families.forEach((fam, idx) => {
+
+        if (fam.enabled) activeTau.push(fam.tauEff);
+
+        const modeText = `<i>&sigma;</i> = ${formatSciHtml(fam.sigma, 2)} cm<sup>2</sup>, <i>&tau;</i><sub>eff</sub> = ${formatSciHtml(fam.tauEff, 3)} s`;
+
+        el(`fam${idx}TauEff`).innerHTML = modeText;
+
+      });
+
+      if (!activeTau.length) {
+
+        el("mTauRange").innerHTML = "-";
+
+        return;
+
+      }
+
+      const minTau = Math.min(...activeTau);
+
+      const maxTau = Math.max(...activeTau);
+
+      el("mTauRange").innerHTML = `${formatRangeSciHtml(minTau)}-${formatRangeSciHtml(maxTau)} s`;
+
+    }
+
+
+
+    function saveMainFigure() {
+
+      const canvas = el("currentCanvas");
+
+      const link = document.createElement("a");
+
+      link.href = canvas.toDataURL("image/png");
+
+      link.download = "defect_tunneling_current.png";
+
+      link.click();
+
+    }
+
+
+
+    function exportCurrentCsv() {
+
+      const state = readState();
+
+      const curves = sampleCurves(state);
+
+      const kmcResult = simulateKmc(state);
+
+      const kmcCurrent = buildKmcCurrent(curves, state, kmcResult);
+
+      const toxMc = simulateToxMonteCarlo(state, curves.t, kmcResult);
+
+      const tauHeaders = state.families.map((fam) => `${fam.name}_tau_eff_s`);
+
+      const xHeaders = state.families.map((fam) => `${fam.name}_x_nm`);
+
+      const rows = [
+
+        [
+
+          "time_s", "I_A", "I_no_defect_A", "I_KMC_display_A", "I_tox_MC_p5_A", "I_tox_MC_p50_A", "I_tox_MC_p95_A",
+
+          "Weibull_tBD_s", "Weibull_failure_probability", "Weibull_y", "Weibull_fit_y",
+
+          "I_over_I_no_defect",
+
+          "log10_I_A", "log10_I_no_defect_A", "Einj_MV_cm", "Qdef_C_m2",
+
+          "injection_screen_factor",
+
+          "area_cm2", "mOx_over_m0", "mSiC_over_m0", "A_FN", "B_FN_V_m",
+
+          "KMC_enabled", "KMC_path_formed", "KMC_breakdown_time_s",
+
+          "KMC_device_length_nm", "KMC_oxide_thickness_nm", "KMC_cell_size_nm",
+
+          ...xHeaders,
+
+          ...tauHeaders
+
+        ]
+
+      ];
+
+      curves.t.forEach((time, idx) => {
+
+        rows.push([
+
+          time,
+
+          curves.current[idx],
+
+          curves.noDefect[idx],
+
+          kmcCurrent ? kmcCurrent[idx] : "",
+
+          toxMc ? toxMc.p5[idx] : "",
+
+          toxMc ? toxMc.p50[idx] : "",
+
+          toxMc ? toxMc.p95[idx] : "",
+
+          toxMc && toxMc.weibull && idx < toxMc.weibull.time.length ? toxMc.weibull.time[idx] : "",
+
+          toxMc && toxMc.weibull && idx < toxMc.weibull.f.length ? toxMc.weibull.f[idx] : "",
+
+          toxMc && toxMc.weibull && idx < toxMc.weibull.y.length ? toxMc.weibull.y[idx] : "",
+
+          toxMc && toxMc.weibull && idx < toxMc.weibull.fitY.length ? toxMc.weibull.fitY[idx] : "",
+
+          curves.ratio[idx],
+
+          curves.log10Current[idx],
+
+          curves.log10NoDefect[idx],
+
+          curves.eEff[idx],
+
+          curves.qdef[idx],
+
+          computeAtTime(state, time).injectionScreenFactor,
+
+          state.areaCm2,
+
+          state.mOx,
+
+          state.mSiC,
+
+          computeAtTime(state, time).aFn,
+
+          computeAtTime(state, time).bFn,
+
+          state.kmc.enabled ? 1 : 0,
+
+          kmcResult.formed ? 1 : 0,
+
+          kmcResult.formed ? kmcResult.breakdownTime : "",
+
+          state.kmc.deviceLengthNm,
+
+          state.kmc.oxideThicknessNm,
+
+          state.kmc.cellNm,
+
+          ...state.families.map((fam) => fam.x),
+
+          ...state.families.map((fam) => fam.tauEff)
+
+        ]);
+
+      });
+
+      const csv = rows.map((row) => row.map((value) => typeof value === "number" ? (Number.isFinite(value) ? String(value) : "") : String(value)).join(",")).join("\n");
+
+      const blob = new Blob([csv], {type: "text/csv;charset=utf-8"});
+
+      const link = document.createElement("a");
+
+      link.href = URL.createObjectURL(blob);
+
+      link.download = "defect_tunneling_I_t.csv";
+
+      link.click();
+
+      URL.revokeObjectURL(link.href);
+
+    }
+
+
+
+    function saveParamsToLocalStorage() {
+
+      try {
+
+        const state = {};
+
+        controls.forEach(id => {
+
+          const input = el(id);
+
+          if (input) {
+
+            state[id] = input.type === "checkbox" ? input.checked : input.value;
+
+          }
+
+        });
+
+        defaults.forEach((_, idx) => {
+
+          [`fam${idx}Enabled`, `fam${idx}N`, `fam${idx}Sigma`, `fam${idx}X`, `fam${idx}Et`].forEach(id => {
+
+            const input = el(id);
+
+            if (input) {
+
+              state[id] = input.type === "checkbox" ? input.checked : input.value;
+
+            }
+
+          });
+
+        });
+
+        localStorage.setItem("defect_tunneling_ui_params_v7", JSON.stringify(state));
+
+      } catch (e) {
+
+        console.error("Failed to save parameters", e);
+
+      }
+
+    }
+
+
+
+    function loadParamsFromLocalStorage() {
+
+      try {
+
+        const saved = localStorage.getItem("defect_tunneling_ui_params_v7");
+
+        if (!saved) return;
+
+        const state = JSON.parse(saved);
+
+        controls.forEach(id => {
+
+          const input = el(id);
+
+          if (input && state[id] !== undefined) {
+
+            if (input.type === "checkbox") {
+
+              input.checked = state[id];
+
+            } else {
+
+              input.value = state[id];
+
+            }
+
+          }
+
+        });
+
+        defaults.forEach((_, idx) => {
+
+          [`fam${idx}Enabled`, `fam${idx}N`, `fam${idx}Sigma`, `fam${idx}X`, `fam${idx}Et`].forEach(id => {
+
+            const input = el(id);
+
+            if (input && state[id] !== undefined) {
+
+              if (input.type === "checkbox") {
+
+                input.checked = state[id];
+
+              } else {
+
+                input.value = state[id];
+
+              }
+
+            }
+
+          });
+
+        });
+
+      } catch (e) {
+
+        console.error("Failed to load parameters", e);
+
+      }
+
+    }
+
+
+
+    buildFamilyControls();
+
+    el("phiB").value = String(REF_PHI_B);
+    el("mOx").value = String(REF_MOX);
+    el("mSiC").value = String(REF_MSIC);
+
+    loadParamsFromLocalStorage();
+
+    controls.forEach((id) => {
+
+      el(id).addEventListener("input", update);
+
+      el(id).addEventListener("change", update);
+
+    });
+
+    defaults.forEach((_, idx) => {
+      [`fam${idx}Enabled`, `fam${idx}N`, `fam${idx}Sigma`, `fam${idx}X`, `fam${idx}Et`].forEach((id) => {
+        const input = el(id);
+        if (input) {
+          input.addEventListener("input", update);
+        }
+      });
+    });
+
+    el("resetX").addEventListener("click", () => {
+      defaults.forEach((fam, idx) => {
+        const xInput = el(`fam${idx}X`);
+        if (xInput) xInput.value = fam.x;
+        const etInput = el(`fam${idx}Et`);
+        if (etInput) etInput.value = fam.et !== undefined ? fam.et : 0.0;
+      });
+      update();
+    });
+
+    el("downloadPng").addEventListener("click", saveMainFigure);
+
+    el("downloadCsv").addEventListener("click", exportCurrentCsv);
+
+    el("dataImport").addEventListener("change", handleDataImport);
+
+    window.addEventListener("resize", update);
+
+    update();
+
+    loadDefaultData();
+
+  </script>
+
+</body>
+
+</html>
