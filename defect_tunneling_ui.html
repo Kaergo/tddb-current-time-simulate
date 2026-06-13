@@ -1193,6 +1193,22 @@
 
 
 
+            <div style="margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px;">
+        <h4>Trap & WKB Parameters</h4>
+        <div class="row">
+          <div class="field"><label>Nt0 (cm^-3)</label><input type="text" id="currentNt0Cm3" value="1e19" /></div>
+          <div class="field"><label>x_decay (nm)</label><input type="text" id="currentXdecayNm" value="0.5" /></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>x_max (nm)</label><input type="text" id="currentXmaxNm" value="3.0" /></div>
+          <div class="field"><label>tau00 (s)</label><input type="text" id="currentTau00" value="1e-13" /></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>Grid N</label><input type="text" id="currentTrapGridN" value="80" /></div>
+          <div class="field"><label>I(0) (A) override</label><input type="text" id="currentI0" value="" placeholder="auto" /></div>
+        </div>
+      </div>
+
       <div class="footer-actions">
 
         <button id="resetX" type="button">重置缺陷深度</button>
@@ -2175,21 +2191,7 @@
 
 
    
-          <div style="margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px;">
-            <h4>Trap & WKB Parameters</h4>
-            <div class="row">
-              <div class="col"><label>Nt0 (cm^-3)</label><input type="text" id="currentNt0Cm3" value="1e19" /></div>
-              <div class="col"><label>x_decay (nm)</label><input type="text" id="currentXdecayNm" value="0.5" /></div>
-            </div>
-            <div class="row">
-              <div class="col"><label>x_max (nm)</label><input type="text" id="currentXmaxNm" value="3.0" /></div>
-              <div class="col"><label>tau00 (s)</label><input type="text" id="currentTau00" value="1e-13" /></div>
-            </div>
-            <div class="row">
-              <div class="col"><label>Grid N</label><input type="text" id="currentTrapGridN" value="80" /></div>
-              <div class="col"><label>I(0) (A) override</label><input type="text" id="currentI0" value="" placeholder="auto" /></div>
-            </div>
-          </div>
+          
  function readState() {
       const phiB = readNumber("phiB", 2.7);
       const mOx = readNumber("mOx", 0.42);
@@ -4489,8 +4491,6 @@ function fitImportedDefects(state) {
 
       const curves = sampleCurves(state);
       const at = interpolateCurrentState(curves, t);
-
-      const curves = sampleCurves(state);
 
       const kmcResult = simulateKmc(state, curves);
 
