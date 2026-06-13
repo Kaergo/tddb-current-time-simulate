@@ -26,24 +26,40 @@ http://127.0.0.1:8765/defect_tunneling_ui.html
 
 主链路为：
 
-```text
-defect charging -> Qdef(t) -> E_inj(t) -> FN current I(t)
-```
+当前主电流模型只描述恒压应力下 near-interface oxide traps 俘获电子后形成负电荷，从而改变 SiO2 内部一维静电势垒并降低 FN 隧穿电流的过程。
 
-电流模型：
+陷阱采用体密度分布：
 
-```text
-I(t) = Area * A_FN * E_inj(t)^2 * exp(-B_FN / E_inj(t))
-```
+$$N_t(x)=N_{t0}\exp(-x/x_d)$$
 
-缺陷俘获电荷通过屏蔽注入边界场强降低 FN 电流：
+离散后：
 
-```text
-\sigma_{trap}(t) = sum_k \sigma_{trap,k} * (1 - exp(-t / tau_eff,k))
-E_inj(t) = E0 - sum_k[\sigma_{trap},k(t) / eps_ox * (tox - x_k) / tox]
-```
+$$N_{sheet,i}=N_t(x_i)\Delta x$$
+$$\sigma_i(t)=qN_{sheet,i}f_i(t)$$
 
-其中 `x_k` 是缺陷到注入界面的深度。缺陷越靠近注入界面，`(tox - x_k) / tox` 越接近 1，对 FN 电流屏蔽越强。
+占据率满足：
+
+$$\frac{df_i}{dt}=\frac{1-f_i}{\tau_i(t)}$$
+
+其中：
+
+$$\tau_i(t)=\tau_{00}\exp[S_{cap,i}(t)]$$
+
+$S_{cap,i}(t)$ 是从 SiC 导带底到陷阱位置 $x_i$ 的 WKB 隧穿 action。深陷阱的多声子/晶格弛豫代价合并进 $\tau_{00}$，不再使用禁带费米尾巴惩罚。
+
+固定电压边界下：
+
+$$E_{inj}(t)=\frac{V_{ox}}{t_{ox}} - \sum_i \frac{\sigma_i(t)}{\varepsilon_{ox}} \frac{t_{ox}-x_i}{t_{ox}}$$
+$$E(x,t)=E_{inj}(t)+\sum_{x_i<x}\frac{\sigma_i(t)}{\varepsilon_{ox}}$$
+
+氧化层导带势垒为：
+
+$$U_c(x,t)=\Phi_B-\int_0^x E(s,t)ds$$
+
+FN 电流由完整势垒 WKB action 给出：
+
+$$I(t)=I(0)\exp[-(S_{FN}(t)-S_{FN}(0))]$$
+
 
 固定物理参数建议：
 

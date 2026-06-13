@@ -1428,7 +1428,7 @@
 
     const controls = [
 
-      "vg", "tox", "phiB", "mOx", "mSiC", "areaCm2", "epsOx", "minField",
+      "vg", "tox", "phiB", "mOx", "mSiC", "areaCm2", "epsOx", "minField", "currentNt0Cm3", "currentXdecayNm", "currentXmaxNm", "currentTau00", "currentTrapGridN",
 
       "timeSlider", "timeEnd", "tempK", "tauGamma", "tauFieldBeta",
 
@@ -2239,7 +2239,7 @@
 
         const sigma = Math.max(1e-50, readNumber(`fam${idx}Sigma`, fam.sigma));
 
-        const res = effectiveTau({
+        const res = effectiveTauLegacy({
 
           sigma,
 
@@ -2609,7 +2609,7 @@
 
 
 
-    function effectiveTau(params) {
+    function effectiveTauLegacy(params) {
 
       const NC_CM3 = 1.8e19;
 
@@ -2689,7 +2689,277 @@
 
 
 
-    function computeAtTime(state, t) {
+    
+    function buildCurrentTrapGrid(state) {
+      const n = Math.max(8, Math.round(state.currentTrapGridN || 80));
+      const toxM = state.tox * 1e-9;
+      const xmaxM = Math.min(toxM, Math.max(0.1e-9, state.currentXmaxNm * 1e-9));
+      const dxM = xmaxM / n;
+
+      const Nt0M3 = Math.max(0, state.currentNt0Cm3) * 1e6;
+      const xdM = Math.max(0.02e-9, state.currentXdecayNm * 1e-9);
+
+      const traps = [];
+
+      for (let i = 0; i < n; i += 1) {
+        const xM = (i + 0.5) * dxM;
+        const NtM3 = Nt0M3 * Math.exp(-xM / xdM);
+        const NsheetM2 = NtM3 * dxM;
+
+        traps.push({
+          xM,
+          dxM,
+          NtM3,
+          NsheetM2,
+          f: 0,
+          sigma: 0
+        });
+      }
+
+      return traps;
+    }
+
+    function solveOxideElectrostatics(state, traps) {
+      const epsOx = state.epsRel * EPS0;
+      const toxM = state.tox * 1e-9;
+      const E0 = state.e0Vm;
+
+      let shielding = 0;
+      let sigmaTrap = 0;
+
+      for (const tr of traps) {
+        const sigma = Q * tr.NsheetM2 * tr.f;
+        tr.sigma = sigma;
+        sigmaTrap += sigma;
+        shielding += (sigma / epsOx) * ((toxM - tr.xM) / Math.max(toxM, 1e-30));
+      }
+
+      const Einj = E0 - shielding;
+
+      function EofX(xM) {
+        let E = Einj;
+        for (const tr of traps) {
+          if (tr.xM < xM) {
+            E += tr.sigma / epsOx;
+          } else {
+            break;
+          }
+        }
+        return E;
+      }
+
+      return { Einj, EofX, sigmaTrap };
+    }
+
+    function barrierUcEv(state, electro, xM) {
+      if (xM <= 0) return state.phiB;
+
+      const stepM = 0.02e-9;
+      const steps = Math.max(16, Math.ceil(xM / stepM));
+
+      let integralV = 0;
+      let xPrev = 0;
+      let ePrev = electro.EofX(0);
+
+      for (let i = 1; i <= steps; i += 1) {
+        const xCur = xM * i / steps;
+        const eCur = electro.EofX(xCur);
+
+        integralV += 0.5 * (ePrev + eCur) * (xCur - xPrev);
+
+        xPrev = xCur;
+        ePrev = eCur;
+      }
+
+      return state.phiB - integralV;
+    }
+
+    function wkbActionToX(state, electro, xEndM) {
+      const mOxKg = state.mOx * M0;
+      const stepM = 0.015e-9;
+      const steps = Math.max(24, Math.ceil(xEndM / stepM));
+
+      function kappaAt(xM) {
+        const UeV = Math.max(barrierUcEv(state, electro, xM), 0);
+        if (UeV <= 0) return 0;
+        return Math.sqrt(2 * mOxKg * Q * UeV) / HBAR;
+      }
+
+      let action = 0;
+      let xPrev = 0;
+      let kPrev = kappaAt(0);
+
+      for (let i = 1; i <= steps; i += 1) {
+        const xCur = xEndM * i / steps;
+        const kCur = kappaAt(xCur);
+
+        action += 2 * 0.5 * (kPrev + kCur) * (xCur - xPrev);
+
+        xPrev = xCur;
+        kPrev = kCur;
+      }
+
+      return action;
+    }
+
+    function findFnTurningPoint(state, electro) {
+      const toxM = state.tox * 1e-9;
+      const steps = 300;
+
+      let xPrev = 0;
+      let uPrev = barrierUcEv(state, electro, 0);
+
+      for (let i = 1; i <= steps; i += 1) {
+        const x = toxM * i / steps;
+        const u = barrierUcEv(state, electro, x);
+
+        if (u <= 0) {
+          const frac = uPrev / Math.max(uPrev - u, 1e-30);
+          return xPrev + frac * (x - xPrev);
+        }
+
+        xPrev = x;
+        uPrev = u;
+      }
+
+      return toxM;
+    }
+
+    function wkbActionFn(state, electro) {
+      const x2 = findFnTurningPoint(state, electro);
+      return wkbActionToX(state, electro, x2);
+    }
+
+    function fnInitialCurrent(state) {
+      const bFn = defaultBFnVm(state.phiB, state.mOx);
+      const aFn = defaultAFn(state.mSiC, state.mOx, state.phiB);
+      const E = Math.max(state.e0Vm, 1);
+
+      const logI =
+        Math.log(Math.max(aFn * state.areaM2, 1e-300)) +
+        2 * Math.log(E) -
+        bFn / E;
+
+      return Math.exp(clamp(logI, -745, 709));
+    }
+
+    function simulateCurrentRelaxation(state, times) {
+      const traps = buildCurrentTrapGrid(state);
+
+      const electro0 = solveOxideElectrostatics(state, traps);
+      const S0 = wkbActionFn(state, electro0);
+
+      const I0 =
+        Number.isFinite(state.currentI0) && state.currentI0 > 0
+          ? state.currentI0
+          : fnInitialCurrent(state);
+
+      const out = [];
+      let tPrev = 0;
+
+      for (const t of times) {
+        let dtLeft = Math.max(0, t - tPrev);
+
+        while (dtLeft > 0) {
+          const electro = solveOxideElectrostatics(state, traps);
+
+          let tauMin = Infinity;
+          const taus = traps.map((tr) => {
+            const Scap = wkbActionToX(state, electro, tr.xM);
+            const tau = state.currentTau00 * Math.exp(clamp(Scap, 0, 120));
+            tauMin = Math.min(tauMin, tau);
+            return tau;
+          });
+
+          const dt = Math.min(
+            dtLeft,
+            Math.max(dtLeft / 40, 0.25 * Math.max(tauMin, 1e-15))
+          );
+
+          if (!(dt > 0) || !Number.isFinite(dt)) break;
+
+          for (let i = 0; i < traps.length; i += 1) {
+            const tr = traps[i];
+            const tau = Math.max(taus[i], 1e-30);
+            tr.f = 1 - (1 - tr.f) * Math.exp(-dt / tau);
+            tr.f = clamp(tr.f, 0, 1);
+          }
+
+          dtLeft -= dt;
+        }
+
+        const electro = solveOxideElectrostatics(state, traps);
+        const S = wkbActionFn(state, electro);
+        const I = I0 * Math.exp(clamp(-(S - S0), -745, 80));
+
+        out.push({
+          t,
+          current: I,
+          noDefect: I0,
+          eEff: electro.Einj / 1e8,
+          eEffVm: electro.Einj,
+          sigmaTrap: electro.sigmaTrap,
+          qdef: electro.sigmaTrap,
+          log10Current: Math.log10(Math.max(I, 1e-300)),
+          log10NoDefect: Math.log10(Math.max(I0, 1e-300)),
+          ratio: I / I0,
+          Sfn: S,
+          traps: traps.map((tr) => ({
+            xM: tr.xM,
+            xNm: tr.xM * 1e9,
+            f: tr.f,
+            sigma: tr.sigma,
+            NtM3: tr.NtM3,
+            NsheetM2: tr.NsheetM2
+          }))
+        });
+
+        tPrev = t;
+      }
+
+      return out;
+    }
+
+    function interpolateCurrentState(curves, t) {
+      const arr = curves.sim;
+      if (!arr || !arr.length) return null;
+
+      if (t <= arr[0].t) return arr[0];
+      if (t >= arr[arr.length - 1].t) return arr[arr.length - 1];
+
+      for (let i = 1; i < arr.length; i += 1) {
+        if (arr[i].t >= t) {
+          const a = arr[i - 1];
+          const b = arr[i];
+
+          const denom = Math.max(Math.log(b.t) - Math.log(a.t), 1e-30);
+          const f = (Math.log(t) - Math.log(a.t)) / denom;
+
+          const lerp = (x, y) => x + f * (y - x);
+          const logLerp = (x, y) =>
+            Math.exp(lerp(Math.log(Math.max(x, 1e-300)), Math.log(Math.max(y, 1e-300))));
+
+          return {
+            t,
+            current: logLerp(a.current, b.current),
+            noDefect: lerp(a.noDefect, b.noDefect),
+            eEff: lerp(a.eEff, b.eEff),
+            eEffVm: lerp(a.eEffVm, b.eEffVm),
+            sigmaTrap: lerp(a.sigmaTrap, b.sigmaTrap),
+            qdef: lerp(a.sigmaTrap, b.sigmaTrap),
+            log10Current: lerp(a.log10Current, b.log10Current),
+            log10NoDefect: lerp(a.log10NoDefect, b.log10NoDefect),
+            ratio: lerp(a.ratio, b.ratio),
+            Sfn: lerp(a.Sfn, b.Sfn),
+            traps: b.traps
+          };
+        }
+      }
+
+      return arr[arr.length - 1];
+    }
+
+    function computeAtTimeLegacy(state, t) {
 
       const epsOx = state.epsRel * EPS0;
 
@@ -2780,64 +3050,6 @@
 
 
 
-    function sampleCurves(state) {
-
-      let tMin = 1e-3;
-
-      let tMax = state.endTime;
-
-      if (importedData && importedData.t && importedData.t.length > 0) {
-
-        tMin = importedData.t[0];
-
-        tMax = Math.max(importedData.t[importedData.t.length - 1] * 1.02, state.time);
-
-      }
-
-      const logMin = Math.log10(tMin);
-
-      const logMax = Math.log10(Math.max(tMax, tMin * 10));
-
-      const t = logspace(logMin, logMax, 360);
-
-      const current = [];
-
-      const noDefect = [];
-
-      const eEff = [];
-
-      const qdef = [];
-
-      const log10Current = [];
-
-      const log10NoDefect = [];
-
-      const ratio = [];
-
-      for (const x of t) {
-
-        const c = computeAtTime(state, x);
-
-        current.push(c.current);
-
-        noDefect.push(c.noDefect);
-
-        eEff.push(c.eEffVm / 1e8);
-
-        qdef.push(c.qdef);
-
-        log10Current.push(c.log10Current);
-
-        log10NoDefect.push(c.log10NoDefect);
-
-        ratio.push(c.ratio);
-
-      }
-
-      return {t, current, noDefect, eEff, qdef, log10Current, log10NoDefect, ratio};
-
-    }
-
     function gaussianRandom(rng) {
 
       const u1 = Math.max(1e-12, rng());
@@ -2878,7 +3090,7 @@
 
         const x = Math.min(fam.x, Math.max(0.01, tox - 1e-3));
 
-        const res = effectiveTau({
+        const res = effectiveTauLegacy({
 
           sigma: fam.sigma,
 
@@ -3000,7 +3212,7 @@
 
           for (const patchState of patchStates) {
 
-            current += computeAtTime(patchState, time).current;
+            current += computeAtTimeLegacy(patchState, time).current;
 
           }
 
@@ -3254,7 +3466,7 @@
 
         const tVal = sampledTimes[j];
 
-        const m = computeAtTime(state, tVal);
+        const m = computeAtTimeLegacy(state, tVal);
 
         if (!Number.isFinite(m.current) || m.current <= 0) return null;
 
@@ -3354,7 +3566,7 @@
 
         }
 
-        const res = effectiveTau({
+        const res = effectiveTauLegacy({
 
           sigma: fam.sigma,
 
@@ -3480,7 +3692,7 @@
 
       for (const sample of samples) {
 
-        const model = computeAtTime(state, sample.time);
+        const model = computeAtTimeLegacy(state, sample.time);
 
         if (!Number.isFinite(model.current) || model.current <= 0) return Infinity;
 
@@ -3500,143 +3712,82 @@
 
 
 
-    function fitImportedDefects(state) {
-
-      const samples = collectFitSamples(140);
-
-      if (!samples) return null;
-
-      const variables = [
-
-        {kind: "vg", min: 1, max: 80, step: 2.0}
-
-      ];
-
-      let vector = [
-
-        clamp(state.vg, 1, 80)
-
-      ];
-
-      state.families.forEach((fam, idx) => {
-
-        if (!fam.enabled) return;
-
-        variables.push({idx, kind: "n", min: -6, max: 3, step: 0.9});
-
-        variables.push({idx, kind: "x", min: 0.05, max: Math.max(0.05, Math.min(5, state.tox)), step: 0.25});
-
-      });
-
-      const startArea = state.areaCm2;
-
-      state.families.forEach((fam) => {
-
-        if (!fam.enabled) return;
-
-        vector.push(clamp(Math.log10(Math.max(fam.n12, 1e-6)), -6, 2));
-
-        vector.push(clamp(fam.x, 0.05, Math.max(0.05, Math.min(5, state.tox))));
-
-      });
-
-      const objective = (candidate) => calculateFitObjective(cloneStateWithFitVector(state, candidate, variables), samples);
-
-      let bestVector = vector.slice();
-
-      let bestRmse = objective(bestVector);
-
-      let steps = variables.map((variable) => variable.step);
-
-      for (let round = 0; round < 9; round += 1) {
-
-        let improved = false;
-
-        for (let i = 0; i < bestVector.length; i += 1) {
-
-          const bounds = variables[i];
-
-          const candidates = [-steps[i], steps[i]].map((delta) => {
-
-            const next = bestVector.slice();
-
-            next[i] = clamp(next[i] + delta, bounds.min, bounds.max);
-
-            return next;
-
-          });
-
-          for (const candidate of candidates) {
-
-            const rmse = objective(candidate);
-
-            if (rmse + 1e-8 < bestRmse) {
-
-              bestRmse = rmse;
-
-              bestVector = candidate;
-
-              improved = true;
-
-            }
-
-          }
-
-        }
-
-        if (!improved) {
-
-          steps = steps.map((value) => value * 0.55);
-
-        }
-
-      }
-
-      const fittedState = cloneStateWithFitVector(state, bestVector, variables);
-
-      el("vg").value = String(Number(fittedState.vg.toPrecision(6)));
-
-      fittedState.families.forEach((fam, idx) => {
-
-        if (!fam.enabled) return;
-
-        el(`fam${idx}N`).value = String(Number(fam.n12.toPrecision(6)));
-
-        const xInput = el(`fam${idx}X`);
-
-        if (xInput) {
-
-          xInput.value = String(Number(fam.x.toPrecision(6)));
-
-        }
-
-      });
-
-      el("areaCm2").value = String(startArea);
-
+    
+    function cloneStateWithCurrentFitVector(baseState, vector) {
       return {
-
-        rmseLog10: bestRmse,
-
-        rmseLn: bestRmse * Math.LN10,
-
-        areaCm2: startArea,
-
-        phiB: state.phiB,
-
-        vg: fittedState.vg,
-
-        points: samples.length,
-
-        variables: bestVector.length
-
+        ...baseState,
+        currentNt0Cm3: Math.pow(10, vector[0]),
+        currentXdecayNm: Math.pow(10, vector[1]),
+        currentTau00: Math.pow(10, vector[2])
       };
-
     }
 
+    function calculateCurrentFitObjective(state, samples) {
+      if (!samples || samples.length < 2) return Infinity;
 
+      const times = samples.map((s) => s.time);
+      const sim = simulateCurrentRelaxation(state, times);
 
-    function cloneStateWithKmcParams(baseState, params) {
+      let sumSq = 0;
+
+      for (let i = 0; i < samples.length; i += 1) {
+        const modelLog = Math.log10(Math.max(sim[i].current, 1e-300));
+        const res = samples[i].logI - modelLog;
+        sumSq += res * res;
+      }
+
+      return Math.sqrt(sumSq / samples.length);
+    }
+
+    function fitImportedDefects(state) {
+      const samples = collectFitSamples(140);
+      if (!samples) return;
+
+      const variables = [
+        {kind: "logNt0", min: 15, max: 22, step: 0.7},
+        {kind: "logXd", min: -1.3, max: 0.7, step: 0.25},
+        {kind: "logTau00", min: -30, max: 5, step: 2.0}
+      ];
+
+      const stateSpace = buildStateSpace(variables);
+
+      let bestError = Infinity;
+      let bestVector = null;
+
+      for (const vec of stateSpace) {
+        const candidateState = cloneStateWithCurrentFitVector(state, vec);
+        const err = calculateCurrentFitObjective(candidateState, samples);
+        if (err < bestError) {
+          bestError = err;
+          bestVector = vec;
+        }
+      }
+
+      if (bestVector) {
+        const localSpace = buildLocalSpace(bestVector, variables, 3);
+        for (const vec of localSpace) {
+          const candidateState = cloneStateWithCurrentFitVector(state, vec);
+          const err = calculateCurrentFitObjective(candidateState, samples);
+          if (err < bestError) {
+            bestError = err;
+            bestVector = vec;
+          }
+        }
+      }
+
+      if (bestVector) {
+        const fittedState = cloneStateWithCurrentFitVector(state, bestVector);
+        el("currentNt0Cm3").value = String(Number(fittedState.currentNt0Cm3.toPrecision(6)));
+        el("currentXdecayNm").value = String(Number(fittedState.currentXdecayNm.toPrecision(6)));
+        el("currentTau00").value = String(Number(fittedState.currentTau00.toPrecision(6)));
+        
+        requestAnimationFrame(() => {
+          update();
+        });
+      }
+    }
+
+function cloneStateWithKmcParams(baseState, params) {
 
       const logK0 = clamp(params.logK0, -14, 2);
 
@@ -3986,7 +4137,7 @@
 
       while (time < state.endTime && events.length < kmc.maxEvents) {
 
-        const at = computeAtTime(state, Math.max(time, 1e-3));
+        const at = computeAtTimeLegacy(state, Math.max(time, 1e-3));
 
         const indices = [];
 
@@ -4254,7 +4405,7 @@
 
       const epsOx = state.epsRel * EPS0;
 
-      const visualChargeGain = 3;
+      const visualChargeGain = 1;
 
       const spreadNm = Math.max(0.08, Math.min(0.45, state.tox * 0.018));
 
@@ -5566,9 +5717,8 @@
 
       slider.value = String(Math.log10(t));
 
-      const at = computeAtTime(state, t);
-
       const curves = sampleCurves(state);
+      const at = interpolateCurrentState(curves, t);
 
       const kmcResult = simulateKmc(state);
 
@@ -5857,7 +6007,7 @@
 
           curves.qdef[idx],
 
-          computeAtTime(state, time).injectionScreenFactor,
+          computeAtTimeLegacy(state, time).injectionScreenFactor,
 
           state.areaCm2,
 
@@ -5865,9 +6015,9 @@
 
           state.mSiC,
 
-          computeAtTime(state, time).aFn,
+          computeAtTimeLegacy(state, time).aFn,
 
-          computeAtTime(state, time).bFn,
+          computeAtTimeLegacy(state, time).bFn,
 
           state.kmc.enabled ? 1 : 0,
 
@@ -6069,3 +6219,5 @@
 </body>
 
 </html>
+
+
