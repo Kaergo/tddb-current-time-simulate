@@ -2234,7 +2234,9 @@
         currentXmaxNm,
         currentTau00,
         currentTrapGridN,
-        currentI0
+        currentI0,
+        families: [],
+        kmc: {enabled: false, deviceLengthNm: 50, oxideThicknessNm: state.tox, cellNm: 1, bdGain: 1}
       };
     }
 
@@ -4783,9 +4785,9 @@ function fitImportedDefects(state) {
 
           "log10_I_A", "log10_I_no_defect_A", "Einj_MV_cm", "sigmaTrap_C_m2",
 
-          "injection_screen_factor",
+          
 
-          "area_cm2", "mOx_over_m0", "mSiC_over_m0", "A_FN", "B_FN_V_m",
+          "area_cm2", "mOx_over_m0", "mSiC_over_m0", 
 
           "KMC_enabled", "KMC_path_formed", "KMC_breakdown_time_s",
 
@@ -4835,7 +4837,7 @@ function fitImportedDefects(state) {
 
           curves.qdef[idx],
 
-          computeAtTime(state, time).injectionScreenFactor,
+          
 
           state.areaCm2,
 
@@ -4843,9 +4845,9 @@ function fitImportedDefects(state) {
 
           state.mSiC,
 
-          computeAtTime(state, time).aFn,
+          
 
-          computeAtTime(state, time).bFn,
+          
 
           state.kmc.enabled ? 1 : 0,
 
