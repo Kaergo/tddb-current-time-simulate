@@ -23,20 +23,20 @@
 
 ```text
 I(t) = K_FN * E_eff(t)^2 * exp(-B_FN / E_eff(t))
-E_eff(t) = E0 - Q_def(t) / eps_ox
+E_eff(t) = E0 - \sigma_{trap}(t) / eps_ox
 ```
 
 - `K_FN`: 有效 FN 前因子，由数据初始点推导
 - `B_FN`: FN 隧穿常数，由基准势垒高度 (2.7 eV) 和有效质量计算得出。<i>物理注释：在实际物理图像中，由于半导体表面弯曲（表面电势 &phi;<sub>s</sub>(t)）以及肖特基势垒降低效应（Schottky Barrier Lowering，即图像力降低），注入端的有效势垒高度是随时间动态变化的。但在 reduced-order 拟合脚本中，为了简化计算和保证参数唯一可辨识性，通常采用名义常数 B_FN，而将动态弯曲与降低效应的平均贡献归并进有效场强 E_eff(t) 或有效前置因子 K_FN 中。</i>
 - `E0`: 初始名义电场
-- `Q_def(t)`: t 时刻总俘获的面电荷密度 (C/m^2)
+- `\sigma_{trap}(t)`: t 时刻总俘获的面电荷密度 (C/m^2)
 
 ### 2.2 缺陷分布与俘获动力学
 
 缺陷不作为额外漏电通道，只通过俘获电子降低有效电场。总面电荷通过对进入氧化层深度 <i>x</i> 的体浓度 <i>N</i><sub>t</sub>(<i>x</i>) 积分得到：
 
 对于多缺陷物种（n_species &gt; 1），总俘获电荷为各物种之和：
-`Q_def(t) = sum_j [ q * 积分( N_t_j(x) * [1 - exp(-t / tau_c_j(x, t))] * dx ) ]`
+`\sigma_{trap}(t) = sum_j [ q * 积分( N_t_j(x) * [1 - exp(-t / tau_c_j(x, t))] * dx ) ]`
 
 其中，每个缺陷物种 <i>j</i> 的空间分布呈单指数衰减，且共用同一个空间衰减特征长度：
 `N_t_j(x) = Nt0_j * exp(-x / x_decay)`

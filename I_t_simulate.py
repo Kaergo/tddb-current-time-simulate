@@ -11,8 +11,8 @@ The fitted current is:
 
 where the effective oxide field is reduced by occupied defect families:
 
-    Q_def(t) = sum_k Q_k * (1 - exp(-c_k * t))
-    E_eff(t) = E_0 - Q_def(t) / eps_ox
+    sigma_trap(t) = sum_k sigma_trap_k * (1 - exp(-c_k * t))
+    E_eff(t) = E_0 - sigma_trap(t) / eps_ox
 
 No TAT/PF component, TDDB generation term, or empirical comparison model is
 used in the main fitting path.
@@ -162,7 +162,7 @@ def parse_args() -> argparse.Namespace:
         "--defect-families",
         type=int,
         default=4,
-        help="Number of defect-distribution families used in Q_def(t).",
+        help="Number of defect-distribution families used in sigma_trap(t).",
     )
     parser.add_argument(
         "--temperature-c",
@@ -198,7 +198,7 @@ def parse_args() -> argparse.Namespace:
         "--eps-ox-r",
         type=float,
         default=3.9,
-        help="Relative permittivity of SiO2 used in E_eff = E0 - Q_def/eps_ox.",
+        help="Relative permittivity of SiO2 used in E_eff = E0 - sigma_trap/eps_ox.",
     )
     parser.add_argument(
         "--b-fn-vm",
@@ -473,9 +473,9 @@ def generate_demo_trace(
     weights = np.linspace(0.7, 1.3, ncomp)
     weights = weights / np.sum(weights)
     q_total = 0.13 * eps_ox * e0_v_m
-    qcaps = q_total * weights
-    qdef = (1.0 - np.exp(-np.outer(t, rates))).dot(qcaps)
-    e_eff = np.maximum(e0_v_m - qdef / eps_ox, min_field_v_m)
+    sigma_sat = q_total * weights
+    sigma_trap = (1.0 - np.exp(-np.outer(t, rates))).dot(sigma_sat)
+    e_eff = np.maximum(e0_v_m - sigma_trap / eps_ox, min_field_v_m)
 
     target_i0 = 8.0e-6 * max(area_cm2 / gate_area_cm2(200.0, 200.0), 1.0e-6)
     log_k = math.log(target_i0) - 2.0 * math.log(e0_v_m) + b_fn_v_m / e0_v_m
@@ -495,7 +495,7 @@ def generate_demo_trace(
         "demo_K_FN_eff": float(math.exp(log_k)),
         "demo_E0_V_m": float(e0_v_m),
         "demo_B_FN_V_m": float(b_fn_v_m),
-        "demo_Qdef_final_C_m2": float(qdef[min(bd_idx, qdef.size - 1)]),
+        "demo_Qdef_final_C_m2": float(sigma_trap[min(bd_idx, sigma_trap.size - 1)]),
         "demo_Eeff_final_V_m": float(e_eff[min(bd_idx, e_eff.size - 1)]),
     }
 
@@ -666,7 +666,7 @@ def fn_defect_components(
         
         n_species = scheme3_species
         if n_species > 1:
-            qcaps_list = []
+            sigma_sat_list = []
             dE_list = []
             for j in range(n_species):
                 log_Nt0 = float(p[4 + 2*j])
@@ -676,16 +676,16 @@ def fn_defect_components(
                 dE_list.append(dE_val)
                 
                 N_x = Nt0 * np.exp(-x_grid / np.maximum(x_decay, 1e-9))
-                # Unified capture charge density Q_cap_max_x in C/m^2
-                Q_cap_max_x = Q * N_x * dx_nm * 1e-3
-                qcaps_list.append(Q_cap_max_x)
+                # Unified capture charge density sigma_sat_max_x in C/m^2
+                sigma_sat_max_x = Q * N_x * dx_nm * 1e-3
+                sigma_sat_list.append(sigma_sat_max_x)
         else:
             log_Nt0 = float(p[4])
             dE = float(p[5]) if len(p) > 5 else 1.7
             
             Nt0_cm3 = np.exp(log_Nt0)
             Nt_x = Nt0_cm3 * np.exp(-x_grid / x_decay)
-            qcaps = Q * Nt_x * dx_nm * 1e-3
+            sigma_sat = Q * Nt_x * dx_nm * 1e-3
             
         m_ox = M_OX_REL * M0
         wkb_coeff = 2.0 * np.sqrt(2.0 * m_ox * Q) / HBAR
@@ -728,7 +728,10 @@ def fn_defect_components(
                     
                     etrap_abs = uc_local - dE_sp
                     kT_eV = temperature_K * 8.617e-5
-                    g_access = 1.0 / (1.0 + np.exp(np.clip((etrap_abs - ef_surf_eV) / kT_eV, -100, 100)))
+                    if j == 0:
+                        g_access = 1.0 / (1.0 + np.exp(np.clip((etrap_abs - ef_surf_eV) / kT_eV, -100, 100)))
+                    else:
+                        g_access = 1.0  # Inelastic deep traps bypass Fermi tail penalty
                     
                     # Calculate elastic prefactor based on surface potential (ns)
                     sigma_elastic = 1e-15
@@ -746,8 +749,8 @@ def fn_defect_components(
                     
                     tau_c = tau0_eff / T_tunnel_j
                     c_rate = (1.0 / tau_c) / np.maximum(g_access, 1e-15)
-                    qeq = qcaps_list[j] * g_access
-                    qdef_current_list[j] = qeq - (qeq - qdef_current_list[j]) * np.exp(-c_rate * dt)
+                    sigma_eq = sigma_sat_list[j] * g_access
+                    qdef_current_list[j] = sigma_eq - (sigma_eq - qdef_current_list[j]) * np.exp(-c_rate * dt)
                 qdef_current = sum(qdef_current_list)
             else:
                 integral = wkb_coeff * np.cumsum(np.sqrt(np.maximum(0.0, uc_local - dE)) * dx_m)
@@ -772,35 +775,37 @@ def fn_defect_components(
                 
                 tau_c = tau0_eff / T_tunnel
                 c_rate = (1.0 / tau_c) / np.maximum(g_access, 1e-15)
-                qeq = qcaps * g_access
-                qdef_current = qeq - (qeq - qdef_current) * np.exp(-c_rate * dt)
+                sigma_eq = sigma_sat * g_access
+                qdef_current = sigma_eq - (sigma_eq - qdef_current) * np.exp(-c_rate * dt)
             
             qdef_history.append(np.sum(qdef_current))
-            e_eff_history.append(e_inj)
+            integral_FN = np.sum(wkb_coeff * np.sqrt(np.maximum(0.0, uc_local)) * dx_m)
+            e_eff_wkb = b_fn_v_m / max(integral_FN, 1e-10)
+            e_eff_history.append(e_eff_wkb)
             
-        qdef = np.interp(t, t_grid, qdef_history)
+        sigma_trap = np.interp(t, t_grid, qdef_history)
         e_eff = np.interp(t, t_grid, e_eff_history)
         rates = np.zeros(1)
         if n_species > 1:
-            qcaps = np.array([sum(np.sum(qc) for qc in qcaps_list)])
+            sigma_sat = np.array([sum(np.sum(qc) for qc in sigma_sat_list)])
         else:
-            qcaps = np.array([np.sum(qcaps)])
+            sigma_sat = np.array([np.sum(sigma_sat)])
     else:
-        qcaps = np.exp(p[1 : 1 + ncomp])
+        sigma_sat = np.exp(p[1 : 1 + ncomp])
         rates = np.exp(p[1 + ncomp : 1 + 2 * ncomp])
     if not scheme3:
         fill = 1.0 - np.exp(-np.outer(t, rates))
-        qdef = fill.dot(qcaps)
-        e_eff = np.maximum(e0_v_m - qdef / eps_ox, min_field_v_m)
+        sigma_trap = fill.dot(sigma_sat)
+        e_eff = np.maximum(e0_v_m - sigma_trap / eps_ox, min_field_v_m)
 
     log_current = log_k + 2.0 * np.log(e_eff) - b_fn_v_m / e_eff
     current = np.exp(np.clip(log_current, -745, 709))
     i_no_defect = math.exp(max(min(log_k + 2.0 * math.log(e0_v_m) - b_fn_v_m / e0_v_m, 709), -745))
     return {
         "current": current,
-        "qdef_c_m2": qdef,
+        "qdef_c_m2": sigma_trap,
         "e_eff_v_m": e_eff,
-        "qcaps_c_m2": qcaps,
+        "qcaps_c_m2": sigma_sat,
         "rates_s_inv": rates,
         "k_fn_eff": float(math.exp(log_k)),
         "i_no_defect_a": float(i_no_defect),
@@ -996,11 +1001,11 @@ def fit_fn_defect_model(
     }
 
 
-def family_rows(qcaps: np.ndarray, rates: np.ndarray) -> list[dict[str, float | str]]:
+def family_rows(sigma_sat: np.ndarray, rates: np.ndarray) -> list[dict[str, float | str]]:
     order = np.argsort(rates)[::-1]
     rows: list[dict[str, float | str]] = []
     for rank, idx in enumerate(order, start=1):
-        qcap = float(qcaps[idx])
+        qcap = float(sigma_sat[idx])
         rate = float(rates[idx])
         rows.append(
             {
@@ -1086,9 +1091,9 @@ def analyze_trace(
     ncomp = fit["ncomp"]
     raw = fn_defect_components(fit["params"], t_pre, ncomp, e0_v_m, eps_ox, b_fn_v_m, min_field_v_m, scheme3=scheme3, ns=ns, vth=vth, temperature_K=temperature_K, ef_surf_eV=ef_surf_eV, scheme3_species=scheme3_species, tox_nm=tox_nm)
     binned = fn_defect_components(fit["params"], tb, ncomp, e0_v_m, eps_ox, b_fn_v_m, min_field_v_m, scheme3=scheme3, ns=ns, vth=vth, temperature_K=temperature_K, ef_surf_eV=ef_surf_eV, scheme3_species=scheme3_species, tox_nm=tox_nm)
-    qcaps = np.asarray(raw["qcaps_c_m2"], dtype=float)
+    sigma_sat = np.asarray(raw["qcaps_c_m2"], dtype=float)
     rates = np.asarray(raw["rates_s_inv"], dtype=float)
-    families = family_rows(qcaps, rates)
+    families = family_rows(sigma_sat, rates)
 
     model_current = np.asarray(raw["current"], dtype=float)
     no_defect_current = np.full_like(t_pre, float(raw["i_no_defect_a"]), dtype=float)
@@ -1140,8 +1145,8 @@ def analyze_trace(
         "k_fn_eff": float(raw["k_fn_eff"]),
         "i_no_defect_a": float(raw["i_no_defect_a"]),
         "families": families,
-        "qcap_total_c_m2": float(np.sum(qcaps)),
-        "ncap_total_cm_minus2": float(np.sum(qcaps) / Q / 1.0e4),
+        "qcap_total_c_m2": float(np.sum(sigma_sat)),
+        "ncap_total_cm_minus2": float(np.sum(sigma_sat) / Q / 1.0e4),
         "qdef_end_c_m2": qdef_end,
         "n_def_occupied_end_cm_minus2": float(qdef_end / Q / 1.0e4),
         "e_eff_end_v_m": e_end,
@@ -1179,8 +1184,8 @@ Source mode: {source_mode}
 Model family:
 - FN tunneling current only: I = K_FN * E_eff^2 * exp(-B_FN / E_eff)
 - Defect families only enter by trapped charge screening the oxide field.
-- Q_def(t) = sum_k Q_k * (1 - exp(-c_k * t))
-- E_eff(t) = E0 - Q_def(t) / eps_ox
+- sigma_trap(t) = sum_k sigma_trap_k * (1 - exp(-c_k * t))
+- E_eff(t) = E0 - sigma_trap(t) / eps_ox
 - No TAT, PF, TDDB generation, or empirical comparison model is included.
 
 Geometry / stress:
@@ -1212,7 +1217,7 @@ K_FN_eff = {analysis['k_fn_eff']:.6e}
 FN no-defect current = {analysis['i_no_defect_a']:.6e} A
 total Qcap = {analysis['qcap_total_c_m2']:.6e} C/m^2
 total Ncap = {analysis['ncap_total_cm_minus2']:.6e} cm^-2
-occupied Qdef at final pre-breakdown point = {analysis['qdef_end_c_m2']:.6e} C/m^2
+occupied sigmaTrap at final pre-breakdown point = {analysis['qdef_end_c_m2']:.6e} C/m^2
 occupied Ndef at final pre-breakdown point = {analysis['n_def_occupied_end_cm_minus2']:.6e} cm^-2
 E_eff final = {analysis['e_eff_end_mv_cm']:.6f} MV/cm
 field drop final = {analysis['field_drop_end_mv_cm']:.6f} MV/cm
@@ -1475,7 +1480,7 @@ FN no-defect QBD density    = {analysis['qbd_no_defect_c_cm2']:.6e} C/cm^2
     plt.figure(figsize=(8.0, 5.0))
     plt.semilogx(analysis["t_pre"], analysis["qdef_c_m2"], linewidth=2)
     plt.xlabel("Time (s)")
-    plt.ylabel("Q_def (C/m$^2$)")
+    plt.ylabel("sigma_trap (C/m$^2$)")
     plt.title("Occupied defect charge")
     plt.tight_layout()
     plt.savefig(output_dir / f"{stem}_qdef.png", dpi=220)

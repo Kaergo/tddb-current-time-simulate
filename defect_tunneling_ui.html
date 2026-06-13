@@ -1253,7 +1253,7 @@
 
         <div class="metric"><span><i>E</i><sub>inj</sub>(<i>t</i>)</span><strong id="mEeff">-</strong></div>
 
-        <div class="metric secondary"><span><i>Q</i><sub>def</sub>(<i>t</i>)</span><strong id="mQdef">-</strong></div>
+        <div class="metric secondary"><span><i>Q</i><sub>def</sub>(<i>t</i>)</span><strong id="msigmaTrap">-</strong></div>
 
         <div class="metric secondary"><span><i>&tau;</i><sub>eff</sub> 范围</span><strong id="mTauRange">-</strong></div>
 
@@ -5592,7 +5592,7 @@
 
       el("mEeff").innerHTML = `${(at.eEffVm / 1e8).toFixed(3)} MV/cm`;
 
-      el("mQdef").innerHTML = formatCompactHtml(at.qdef, "C/m²", 3);
+      el("msigmaTrap").innerHTML = formatCompactHtml(at.qdef, "C/m²", 3);
 
       if (importedData) {
         const fitError = calculateFitError(state);
@@ -5715,7 +5715,7 @@
 
         {x: curves.t, y: curves.eEff, color: "#6a4acb", width: 2.8},
 
-        {leftLabel: "Qdef (C/m²)", rightLabel: "Einj (MV/cm)", cursorTime: t}
+        {leftLabel: "sigmaTrap (C/m²)", rightLabel: "Einj (MV/cm)", cursorTime: t}
 
       );
 
@@ -5803,7 +5803,7 @@
 
           "I_over_I_no_defect",
 
-          "log10_I_A", "log10_I_no_defect_A", "Einj_MV_cm", "Qdef_C_m2",
+          "log10_I_A", "log10_I_no_defect_A", "Einj_MV_cm", "sigmaTrap_C_m2",
 
           "injection_screen_factor",
 

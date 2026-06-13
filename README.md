@@ -33,8 +33,8 @@ I(t) = Area * A_FN * E_inj(t)^2 * exp(-B_FN / E_inj(t))
 缺陷俘获电荷通过屏蔽注入边界场强降低 FN 电流：
 
 ```text
-Q_def(t) = sum_k Q_k * (1 - exp(-t / tau_eff,k))
-E_inj(t) = E0 - sum_k[Q_def,k(t) / eps_ox * (tox - x_k) / tox]
+\sigma_{trap}(t) = sum_k \sigma_{trap,k} * (1 - exp(-t / tau_eff,k))
+E_inj(t) = E0 - sum_k[\sigma_{trap},k(t) / eps_ox * (tox - x_k) / tox]
 ```
 
 其中 `x_k` 是缺陷到注入界面的深度。缺陷越靠近注入界面，`(tox - x_k) / tox` 越接近 1，对 FN 电流屏蔽越强。
@@ -100,7 +100,7 @@ binned R2_log ~= 0.99994
 raw R2_log ~= 0.99977
 ```
 
-但这些 `Q_k` 和 `tau_k` 只是 reduced-order 等效缺陷族参数，不能直接解释为唯一 microscopic trap species。
+但这些 `\sigma_{trap,k}` 和 `tau_k` 只是 reduced-order 等效缺陷族参数，不能直接解释为唯一 microscopic trap species。
 
 ## 4. 截面与时间常数问题
 
