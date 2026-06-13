@@ -650,165 +650,104 @@ def fn_defect_components(
 ) -> dict[str, np.ndarray | float]:
     log_k = float(p[0])
     if scheme3:
-        # Grid setup - Increased resolution to prevent discrete spatial slice crossing kinks
-        x_fn_nm = PHI_B_EV / (e0_v_m * 1e-9)
-        x_grid = np.linspace(0.01, min(x_fn_nm, 3.0), 300)
-        dx_nm = x_grid[1] - x_grid[0]
-        dx_m = dx_nm * 1e-9
+        # WKB scheme parameters: [log_k0, log_Nt0, log_xd, log_tau00]
+        log_Nt0 = float(p[1])
+        log_xd = float(p[2])
+        log_tau00 = float(p[3])
+
+        Nt0_cm3 = np.exp(log_Nt0)
+        Nt0_m3 = Nt0_cm3 * 1e6
+        xd_m = np.exp(log_xd) * 1e-9
+        tau00 = np.exp(log_tau00)
+        tox_m = tox_nm * 1e-9
+
+        # Grid setup
+        n_grid = 80
+        xmax_m = min(tox_m, 3.0e-9)
+        dx_m = xmax_m / n_grid
         
-        # Global Tunneling Prefactors & Spatial Decay Feature Length
-        log_tau0 = float(p[1])
-        log_tau1 = float(p[2])
-        x_decay = float(p[3])
+        x_grid = np.linspace(dx_m/2, xmax_m - dx_m/2, n_grid)
+        N_sheet = Nt0_m3 * np.exp(-x_grid / xd_m) * dx_m
         
-        tau0 = 10**log_tau0
-        tau1 = 10**log_tau1
-        
-        n_species = scheme3_species
-        if n_species > 1:
-            sigma_sat_list = []
-            dE_list = []
-            for j in range(n_species):
-                log_Nt0 = float(p[4 + 2*j])
-                dE_val = float(p[5 + 2*j]) if len(p) > (5 + 2*j) else (1.7 if j == 0 else 1.2)
-                
-                Nt0 = np.exp(log_Nt0)
-                dE_list.append(dE_val)
-                
-                N_x = Nt0 * np.exp(-x_grid / np.maximum(x_decay, 1e-9))
-                # Unified capture charge density sigma_sat_max_x in C/m^2
-                sigma_sat_max_x = Q * N_x * dx_nm * 1e-3
-                sigma_sat_list.append(sigma_sat_max_x)
-        else:
-            log_Nt0 = float(p[4])
-            dE = float(p[5]) if len(p) > 5 else 1.7
-            
-            Nt0_cm3 = np.exp(log_Nt0)
-            Nt_x = Nt0_cm3 * np.exp(-x_grid / x_decay)
-            sigma_sat = Q * Nt_x * dx_nm * 1e-3
-            
         m_ox = M_OX_REL * M0
         wkb_coeff = 2.0 * np.sqrt(2.0 * m_ox * Q) / HBAR
-        
 
-        # ODE Solver - Increased time steps for smooth dynamic feedback
+        # ODE Solver setup
         num_steps = 1000
         t_grid = np.logspace(min(-4, np.log10(max(1e-6, t[0]))), np.log10(max(1e-3, t[-1])), num_steps)
         if t_grid[0] > 0:
             t_grid = np.insert(t_grid, 0, 0.0)
-            
-        qdef_history = [0.0]
-        e_eff_history = [e0_v_m]
+
+        f_trap = np.zeros_like(x_grid)
+        sigma_trap_history = [0.0]
+        S_FN_history = []
         
-        n_species = scheme3_species
-        if n_species > 1:
-            qdef_current_list = [np.zeros_like(x_grid) for _ in range(n_species)]
-        else:
-            qdef_current = np.zeros_like(x_grid)
-            
+        # Initial WKB FN action calculation
+        e_inj_0 = e0_v_m
+        e_ox_local_v_m_0 = np.full_like(x_grid, e_inj_0)
+        uc_local_0 = PHI_B_EV - np.cumsum(e_ox_local_v_m_0 * dx_m)
+        S_FN_0 = 0.0
+        for i, uc in enumerate(uc_local_0):
+            if uc > 0:
+                S_FN_0 += wkb_coeff * np.sqrt(uc) * dx_m
+            else:
+                break
+        S_FN_history.append(S_FN_0)
+        I0 = np.exp(log_k)
+
         for i in range(1, len(t_grid)):
             dt = t_grid[i] - t_grid[i-1]
             
-            if n_species > 1:
-                qdef_current = sum(qdef_current_list)
+            # Electrostatics
+            sigma_i = Q * N_sheet * f_trap
+            sigma_total = np.sum(sigma_i)
+            shielding = np.sum((sigma_i / eps_ox) * ((tox_m - x_grid) / tox_m))
+            e_inj = max(e0_v_m - shielding, min_field_v_m)
             
-            qdef_total_effective = np.sum(qdef_current * (tox_nm - x_grid) / tox_nm)
-            e_inj = max(e0_v_m - qdef_total_effective / eps_ox, min_field_v_m)
+            e_ox_local_v_m = e_inj + np.cumsum(np.insert(sigma_i[:-1], 0, 0.0)) / eps_ox
+            uc_local = PHI_B_EV - np.cumsum(e_ox_local_v_m * dx_m)
             
-            # Local field and potential
-            e_ox_local_v_m = e_inj + np.cumsum(qdef_current) / eps_ox
-            e_ox_local_v_nm = e_ox_local_v_m * 1e-9
-            uc_local = PHI_B_EV - np.cumsum(e_ox_local_v_nm * dx_nm)
+            # Update occupancies
+            S_cap = wkb_coeff * np.cumsum(np.sqrt(np.maximum(0.0, uc_local)) * dx_m)
+            tau_i = tau00 * np.exp(np.clip(S_cap, 0, 150))
+            f_trap = 1.0 - (1.0 - f_trap) * np.exp(-dt / np.maximum(tau_i, 1e-30))
             
-            if n_species > 1:
-                for j in range(n_species):
-                    dE_sp = dE_list[j]
-                    integral_j = wkb_coeff * np.cumsum(np.sqrt(np.maximum(0.0, uc_local - dE_sp)) * dx_m)
-                    T_tunnel_j = np.exp(-np.clip(integral_j, 0, 700))
-                    
-                    etrap_abs = uc_local - dE_sp
-                    kT_eV = temperature_K * 8.617e-5
-                    if j == 0:
-                        g_access = 1.0 / (1.0 + np.exp(np.clip((etrap_abs - ef_surf_eV) / kT_eV, -100, 100)))
-                    else:
-                        g_access = 1.0  # Inelastic deep traps bypass Fermi tail penalty
-                    
-                    # Calculate elastic prefactor based on surface potential (ns)
-                    sigma_elastic = 1e-15
-                    tau_elastic = 1.0 / (sigma_elastic * vth * np.maximum(ns, 1e-20))
-                    
-                    # Smooth step for rate_elastic to prevent kinks
-                    smooth_step = 1.0 / (1.0 + np.exp(-etrap_abs / 0.05)) # 50 meV smearing
-                    rate_elastic = smooth_step / tau_elastic
-                    
-                    # Dynamic prefactor selection based on local energy alignment (CB vs bandgap)
-                    tau_inelastic_x = tau1 + (tau0 - tau1) * smooth_step
-                    rate_inelastic = 1.0 / tau_inelastic_x
-                    
-                    tau0_eff = 1.0 / (rate_elastic + rate_inelastic)
-                    
-                    tau_c = tau0_eff / T_tunnel_j
-                    c_rate = (1.0 / tau_c) / np.maximum(g_access, 1e-15)
-                    sigma_eq = sigma_sat_list[j] * g_access
-                    qdef_current_list[j] = sigma_eq - (sigma_eq - qdef_current_list[j]) * np.exp(-c_rate * dt)
-                qdef_current = sum(qdef_current_list)
-            else:
-                integral = wkb_coeff * np.cumsum(np.sqrt(np.maximum(0.0, uc_local - dE)) * dx_m)
-                T_tunnel = np.exp(-np.clip(integral, 0, 700))
-                
-                etrap_abs = uc_local - dE
-                kT_eV = temperature_K * 8.617e-5
-                g_access = 1.0 / (1.0 + np.exp(np.clip((etrap_abs - ef_surf_eV) / kT_eV, -100, 100)))
-                
-                sigma_elastic = 1e-15
-                tau_elastic = 1.0 / (sigma_elastic * vth * np.maximum(ns, 1e-20))
-                
-                # Smooth step for rate_elastic to prevent kinks
-                smooth_step = 1.0 / (1.0 + np.exp(-etrap_abs / 0.05)) # 50 meV smearing
-                rate_elastic = smooth_step / tau_elastic
-                
-                # Dynamic prefactor selection based on local energy alignment (CB vs bandgap)
-                tau_inelastic_x = tau1 + (tau0 - tau1) * smooth_step
-                rate_inelastic = 1.0 / tau_inelastic_x
-                
-                tau0_eff = 1.0 / (rate_elastic + rate_inelastic)
-                
-                tau_c = tau0_eff / T_tunnel
-                c_rate = (1.0 / tau_c) / np.maximum(g_access, 1e-15)
-                sigma_eq = sigma_sat * g_access
-                qdef_current = sigma_eq - (sigma_eq - qdef_current) * np.exp(-c_rate * dt)
+            # Record FN tunneling Action
+            S_FN = 0.0
+            for j, uc in enumerate(uc_local):
+                if uc > 0:
+                    S_FN += wkb_coeff * np.sqrt(uc) * dx_m
+                else:
+                    break
             
-            qdef_history.append(np.sum(qdef_current))
-            integral_FN = np.sum(wkb_coeff * np.sqrt(np.maximum(0.0, uc_local)) * dx_m)
-            e_eff_wkb = b_fn_v_m / max(integral_FN, 1e-10)
-            e_eff_history.append(e_eff_wkb)
-            
-        sigma_trap = np.interp(t, t_grid, qdef_history)
-        e_eff = np.interp(t, t_grid, e_eff_history)
+            sigma_trap_history.append(sigma_total)
+            S_FN_history.append(S_FN)
+
+        sigma_trap_history = np.array(sigma_trap_history)
+        S_FN_history = np.array(S_FN_history)
+        
+        S_FN_interp = np.interp(t, t_grid, S_FN_history)
+        current = I0 * np.exp(-np.clip(S_FN_interp - S_FN_0, -700, 700))
+        sigma_trap = np.interp(t, t_grid, sigma_trap_history)
+        e_eff = e0_v_m * np.ones_like(t) # Dummy fallback
         rates = np.zeros(1)
-        if n_species > 1:
-            sigma_sat = np.array([sum(np.sum(qc) for qc in sigma_sat_list)])
-        else:
-            sigma_sat = np.array([np.sum(sigma_sat)])
+        sigma_sat = np.array([np.sum(Q * N_sheet)])
     else:
         sigma_sat = np.exp(p[1 : 1 + ncomp])
         rates = np.exp(p[1 + ncomp : 1 + 2 * ncomp])
-    if not scheme3:
         fill = 1.0 - np.exp(-np.outer(t, rates))
         sigma_trap = fill.dot(sigma_sat)
         e_eff = np.maximum(e0_v_m - sigma_trap / eps_ox, min_field_v_m)
+        current = np.exp(np.clip(log_k + 2.0 * np.log(e_eff) - b_fn_v_m / e_eff, -745, 709))
 
-    log_current = log_k + 2.0 * np.log(e_eff) - b_fn_v_m / e_eff
-    current = np.exp(np.clip(log_current, -745, 709))
-    i_no_defect = math.exp(max(min(log_k + 2.0 * math.log(e0_v_m) - b_fn_v_m / e0_v_m, 709), -745))
     return {
         "current": current,
         "qdef_c_m2": sigma_trap,
         "e_eff_v_m": e_eff,
         "qcaps_c_m2": sigma_sat,
         "rates_s_inv": rates,
-        "k_fn_eff": float(math.exp(log_k)),
-        "i_no_defect_a": float(i_no_defect),
+        "i_no_defect_a": current[0] if isinstance(current, np.ndarray) and len(current) > 0 else (I0 if scheme3 else np.exp(np.clip(log_k + 2.0 * np.log(e0_v_m) - b_fn_v_m / e0_v_m, -745, 709))),
+        "k_fn_eff": np.exp(log_k)
     }
 
 
@@ -859,70 +798,23 @@ def fit_fn_defect_model(
 
     p0s: list[np.ndarray] = []
     if scheme3:
-        n_species = scheme3_species
-        if n_species > 1:
-            # Multi-species parameters: log_k0, log_tau0, log_tau1, x_decay + n * [log_Nt0, dE]
-            base_seed = [log_k0, -3.3, 4.0, 1.0]
-            base_lb = [log_k0 - 30.0, -20.0, 0.0, 0.5]
-            base_ub = [log_k0 + 30.0, 0.0, 15.0, 20.0]
-            
-            for j in range(n_species):
-                if j == 0:
-                    base_seed.extend([np.log(2e20), 1.7])
-                    base_lb.extend([np.log(1e14), 0.0])
-                    base_ub.extend([np.log(1e23), 6.0])
-                else:
-                    base_seed.extend([np.log(1e20), 1.2])
-                    base_lb.extend([np.log(1e14), 0.0])
-                    base_ub.extend([np.log(1e23), 6.0])
-                
-            p0s.append(np.array(base_seed))
-            
-            seed2 = [log_k0, -6.0, 5.0, 1.5]
-            for j in range(n_species):
-                if j == 0:
-                    seed2.extend([np.log(1e19), 1.5])
-                else:
-                    seed2.extend([np.log(1e18), 2.0])
-            p0s.append(np.array(seed2))
-            
-            seed3 = [log_k0, -5.0, 4.5, 1.5]
-            for j in range(n_species):
-                if j == 0:
-                    seed3.extend([np.log(1e20), 3.5])
-                else:
-                    seed3.extend([np.log(1e20), 4.5])
-            p0s.append(np.array(seed3))
-            
-            lb = np.array(base_lb)
-            ub = np.array(base_ub)
-        else:
-            # Spatial Single-Defect Model: [log_k0, log_tau0, log_tau1, x_decay, log_Nt0, dE]
-            for seed in [
-                [log_k0, -3.3, 4.0, 0.6, np.log(2.8e20), 1.7],
-                [log_k0, -6.0, 5.0, 0.8, np.log(1e19), 1.7],
-                [log_k0, -8.0, 3.0, 1.0, np.log(1e21), 1.5],
-                [log_k0, -4.0, 6.0, 1.5, np.log(1e18), 2.0],
-                [log_k0, -5.0, 4.5, 2.0, np.log(1e20), 1.2],
-                [log_k0, -5.0, 4.5, 1.5, np.log(1e20), 3.5],
-                [log_k0, -6.0, 5.0, 1.5, np.log(1e20), 4.5],
-                [log_k0, -7.0, 5.5, 1.5, np.log(1e20), 5.5],
-            ]:
-                p0s.append(np.array(seed))
-
-            # Bounds: log_k0, log_tau0, log_tau1, x_decay, log_Nt0, dE
-            lb = np.r_[log_k0 - 30.0, -20.0, 0.0, 0.5, np.log(1e14), 0.0]
-            ub = np.r_[log_k0 + 30.0, 0.0, 15.0, 20.0, np.log(1e23), 6.0]
+        # p = [log_k0, log_Nt0, log_xd, log_tau00]
+        base_seed = [log_k0, np.log(1e19), np.log(0.5), np.log(1e-12)]
+        p0s.append(np.array(base_seed))
+        p0s.append(np.array([log_k0, np.log(1e18), np.log(1.0), np.log(1e-10)]))
+        p0s.append(np.array([log_k0, np.log(1e20), np.log(0.2), np.log(1e-15)]))
+        lb = np.array([log_k0 - 1.5, np.log(1e15), np.log(0.02), np.log(1e-30)])
+        ub = np.array([log_k0 + 1.5, np.log(1e22), np.log(3.0), np.log(1e5)])
     else:
         base_tau = np.geomspace(tau_min, tau_max, ncomp)
-        base_rates = np.clip(1.0 / base_tau, rate_lower * 10.0, rate_upper / 10.0)
-        weights = np.linspace(0.7, 1.3, ncomp)
-        weights = weights / np.sum(weights)
+        seed_rates = 1.0 / base_tau
+        seed_q = np.full(ncomp, 1.0e-3)
+        seed_arr = np.r_[log_k0, np.log(seed_q), np.log(seed_rates)]
+        p0s.append(seed_arr)
 
-        for q_scale, rate_shift in ((0.01, 0.3), (0.03, 1.0), (0.08, 3.0), (0.20, 1.0)):
-            q_seed = np.clip(q_upper * q_scale * weights, q_lower * 10.0, q_upper / max(ncomp, 1))
-            rate_seed = np.clip(base_rates * rate_shift, rate_lower * 10.0, rate_upper / 10.0)
-            p0s.append(np.r_[log_k0, np.log(q_seed), np.log(rate_seed)])
+        alt_rates = seed_rates * 2.0
+        alt_q = np.full(ncomp, 5.0e-4)
+        p0s.append(np.r_[log_k0, np.log(alt_q), np.log(alt_rates)])
 
         lb = np.r_[log_k0 - 30.0, np.log(np.full(ncomp, q_lower)), np.log(np.full(ncomp, rate_lower))]
         ub = np.r_[log_k0 + 30.0, np.log(np.full(ncomp, q_upper)), np.log(np.full(ncomp, rate_upper))]
@@ -967,21 +859,11 @@ def fit_fn_defect_model(
             best = res
             
         if scheme3:
-            n_sp = scheme3_species
-            if n_sp > 1:
-                # Global: log_tau0, log_tau1, x_decay
-                log_tau0_res = res.x[1]
-                log_tau1_res = res.x[2]
-                x_dec_res = res.x[3]
-                res_parts = [f"Global: tau0=10^{log_tau0_res:.2f}, tau1=10^{log_tau1_res:.2f}, x_decay={x_dec_res:.2f}"]
-                for j in range(n_sp):
-                    dE_res = res.x[5 + 2*j]
-                    res_parts.append(f"Sp{j}: dE={dE_res:.2f}")
-                print(f"Result: " + " | ".join(res_parts) + f", Cost={res.cost:.4e}")
-            else:
-                dE_val = res.x[5] if len(res.x) > 5 else 1.7
-                print(f"Seed: tau0=10^{seed[1]:.1f}, tau1=10^{seed[2]:.1f}, x_decay={seed[3]:.2f}, dE={seed[5] if len(seed)>5 else 1.7:.2f} -> "
-                      f"Result: tau0=10^{res.x[1]:.3f}, tau1=10^{res.x[2]:.3f}, x_decay={res.x[3]:.3f}, dE={dE_val:.3f}, Cost={res.cost:.4e}")
+            log_Nt0_res = res.x[1]
+            log_xd_res = res.x[2]
+            log_tau00_res = res.x[3]
+            print(f"Seed: Nt0=10^{seed[1]/np.log(10):.1f}, x_decay=10^{seed[2]/np.log(10):.2f}, tau00=10^{seed[3]/np.log(10):.1f} -> "
+                  f"Result: Nt0=10^{log_Nt0_res/np.log(10):.2f}, x_decay=10^{log_xd_res/np.log(10):.2f}, tau00=10^{log_tau00_res/np.log(10):.1f}, Cost={res.cost:.4e}")
 
     if best is None:
         joined = "; ".join(errors[-3:]) if errors else "unknown optimizer failure"
@@ -1252,28 +1134,13 @@ FN no-defect QBD density    = {analysis['qbd_no_defect_c_cm2']:.6e} C/cm^2
     summary += "\n".join(family_lines) + "\n"
     if scheme3 and "params" in analysis["fit"]:
         p = analysis["fit"]["params"]
-        n_sp = scheme3_species
-        log_tau0_val = p[1]
-        log_tau1_val = p[2]
-        x_decay_val = p[3]
-        summary += f"\nGlobal Tunneling & Spatial Decay Parameters:\n"
-        summary += f"  tau0 (CB aligned) = 10^{log_tau0_val:.4f} s\n"
-        summary += f"  tau1 (bandgap aligned) = 10^{log_tau1_val:.4f} s\n"
-        summary += f"  x_decay (shared decay length) = {x_decay_val:.6f} nm\n"
-        
-        if n_sp > 1:
-            summary += f"\nDynamic Coulomb-Feedback Multi-Defect Model parameters:\n"
-            for j in range(n_sp):
-                log_Nt0_j = p[4 + 2*j]
-                dE_j = p[5 + 2*j] if len(p) > (5 + 2*j) else (1.7 if j == 0 else 1.2)
-                summary += f"Species {j}:\n"
-                summary += f"  Defect Density Nt0_{j} = {math.exp(log_Nt0_j):.6e} cm^-3\n"
-                summary += f"  Defect Energy above SiC CB DeltaEt_{j} = {PHI_B_EV - dE_j:.6f} eV\n"
-        else:
-            dE_val = p[5] if len(p) > 5 else 1.7
-            summary += f"\nDynamic Coulomb-Feedback Single-Defect Model parameters:\n"
-            summary += f"  Defect Density Nt0 = {math.exp(p[4]):.6e} cm^-3\n"
-            summary += f"  Defect Energy above SiC CB DeltaEt = {PHI_B_EV - dE_val:.6f} eV\n"
+        log_Nt0_val = p[1]
+        log_xd_val = p[2]
+        log_tau00_val = p[3]
+        summary += f"\nWKB Trap-Charging-Induced FN Current Relaxation Model parameters:\n"
+        summary += f"  Peak Defect Density Nt0 = 10^{log_Nt0_val/np.log(10):.6f} cm^-3\n"
+        summary += f"  Spatial Decay Length xd = 10^{log_xd_val/np.log(10):.6f} nm\n"
+        summary += f"  Pre-exponential Time Constant tau00 = 10^{log_tau00_val/np.log(10):.6f} s\n"
     (output_dir / f"{stem}_summary.txt").write_text(summary, encoding="utf-8")
 
     data = {
