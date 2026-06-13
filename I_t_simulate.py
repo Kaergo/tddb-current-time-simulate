@@ -1217,19 +1217,12 @@ FN no-defect QBD density    = {analysis['qbd_no_defect_c_cm2']:.6e} C/cm^2
             "tau1_s": float(10**p[2]),
             "x_decay_nm": float(p[3]),
         }
-        if n_sp > 1:
-            p_dict = {}
-            for j in range(n_sp):
-                dE_j = p[5 + 2*j] if len(p) > (5 + 2*j) else (1.7 if j == 0 else 1.2)
-                p_dict[f"Nt0_{j}_cm3"] = float(math.exp(p[4 + 2*j]))
-                p_dict[f"DeltaEt_{j}_eV"] = float(PHI_B_EV - dE_j)
-            fit_summary["fit"]["dynamic_coulomb_multi_defect_parameters"] = p_dict
-        else:
-            dE_val = p[5] if len(p) > 5 else 1.7
-            fit_summary["fit"]["dynamic_coulomb_single_defect_parameters"] = {
-                "Nt0_cm3": float(math.exp(p[4])),
-                "DeltaEt_eV": float(PHI_B_EV - dE_val),
-            }
+        fit_summary["fit"]["wkb_fn_relaxation_parameters"] = {
+            "log_k0": float(p[0]),
+            "Nt0_cm3": float(math.exp(p[1])),
+            "xd_nm": float(math.exp(p[2])),
+            "tau00_s": float(math.exp(p[3]))
+        }
     (output_dir / f"{stem}_fit_summary.json").write_text(
         json.dumps(json_sanitize(fit_summary), indent=2, ensure_ascii=False),
         encoding="utf-8",
