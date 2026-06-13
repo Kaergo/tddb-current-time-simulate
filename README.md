@@ -1,6 +1,12 @@
-# Current_simulate 说明
+# FN Tunneling Current Relaxation Induced by Oxide-Trap Charging
 
-本目录用于 SiC MOS gate current 的 FN 隧穿、缺陷俘获、电流衰减、氧化层厚度起伏、KMC 导电通道击穿演示和预击穿 I-t 数据拟合。
+本项目用于精确模拟 SiC MOS 栅电流在恒压应力下的时间依赖性衰减（Current Relaxation）。核心机制基于 **氧化层内部缺陷的电子俘获与空间面电荷屏蔽效应**，并通过严格的 WKB 势垒积分自洽推算有效 Fowler-Nordheim 隧穿电流。
+
+## 📌 核心更新记录 (Recent Updates)
+- **纯粹的面电荷屏蔽物理**：废除一切模糊的体积/总电荷 `Qdef` 定义，全面采用正规的面电荷密度 $\sigma_{trap}$ 公式进行局部电场的减免计算。
+- **精密的 WKB 势垒积分 (`scheme3`)**：彻底抛弃简化的线性电场衰减，直接在空间网格上对被局域电荷畸变的导带电势进行严格的 $\int \sqrt{U_c(x)} dx$ 积分，导出 $E_{eff, WKB}$，完美消除了因空间离散化引发的数值台阶与异常弯折。
+- **深能级非弹性隧穿去惩罚**：对于多空间物种模型，深能级陷阱不再受到导带费米尾部 ($g_{access}$) 的概率惩罚，物理上严格遵从深态的直接多声子辅助充放电机制。
+- **去击穿化定位**：将统计型击穿（TDDB Weibull 分布与 KMC 导电通道模拟）从核心展示界面隐去，进一步将本项目的科学定位纯化为“电荷俘获诱导的 FN 电流松弛模型”。
 
 当前可执行 UI：
 
