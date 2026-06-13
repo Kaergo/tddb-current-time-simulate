@@ -2178,11 +2178,11 @@
           <div style="margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px;">
             <h4>Trap & WKB Parameters</h4>
             <div class="row">
-              <div class="col"><label>Nt0 (cm^-3)</label><input type="text" id="currentNt0Cm3" value="1e16" /></div>
+              <div class="col"><label>Nt0 (cm^-3)</label><input type="text" id="currentNt0Cm3" value="1e19" /></div>
               <div class="col"><label>x_decay (nm)</label><input type="text" id="currentXdecayNm" value="0.5" /></div>
             </div>
             <div class="row">
-              <div class="col"><label>x_max (nm)</label><input type="text" id="currentXmaxNm" value="10.0" /></div>
+              <div class="col"><label>x_max (nm)</label><input type="text" id="currentXmaxNm" value="3.0" /></div>
               <div class="col"><label>tau00 (s)</label><input type="text" id="currentTau00" value="1e-13" /></div>
             </div>
             <div class="row">
@@ -2207,9 +2207,9 @@
       const kmcCols = 50;
       const kmcRows = Math.round(tox);
       
-      const currentNt0Cm3 = readNumber("currentNt0Cm3", 1e16);
+      const currentNt0Cm3 = readNumber("currentNt0Cm3", 1e19);
       const currentXdecayNm = readNumber("currentXdecayNm", 0.5);
-      const currentXmaxNm = readNumber("currentXmaxNm", 10.0);
+      const currentXmaxNm = readNumber("currentXmaxNm", 3.0);
       const currentTau00 = readNumber("currentTau00", 1e-13);
       const currentTrapGridN = readNumber("currentTrapGridN", 80);
       
@@ -2219,11 +2219,11 @@
 
       return {
         phiB, mOx, mSiC, areaCm2, areaM2: areaCm2 * 1e-4,
-        epsRel: readNumber("epsOx", 9.7),
+        epsRel: readNumber("epsOx", 3.9),
         minFieldMvCm: readNumber("minField", 2.0),
         tox,
         vg,
-        e0Vm: fieldMvCm * 1e6,
+        e0Vm: fieldMvCm * 1e8,
         time,
         endTime,
         kmcDeviceLengthNm,
@@ -2388,7 +2388,7 @@
           t,
           current: I,
           noDefect: I0,
-          eEff: electro.eEffVm / 1e6,
+          eEff: electro.eEffVm / 1e8,
           eEffVm: electro.eEffVm,
           sigmaTrap: electro.qdefTotal,
           log10Current: Math.log10(Math.max(I, 1e-300)),
